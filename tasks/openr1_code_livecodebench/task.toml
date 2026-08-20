@@ -1,0 +1,57 @@
+schema_version = "1.5"
+name = "openr1_code_livecodebench"
+
+[task]
+name = "ai4ai/openr1-code-livecodebench"
+version = "1.1.0"
+description = "Improve a fixed 1.5B code model, scored by LiveCodeBench"
+
+[agent]
+timeout_sec = 14400
+
+[verifier]
+timeout_sec = 86400
+environment_mode = "separate"
+
+[x-ai4ai.formal]
+retrain_budget_sec = 43200
+artifact_limit = 3
+selection_rule = "best_valid_of_up_to_3"
+
+[environment]
+dockerfile = "environment/Dockerfile"
+image = "docker.io/chiyizhe/ai4ai@sha256:f15cd8f7d74d006dd8e4b5abb545406f29cca08c436225b8696e8dd13fd87005"
+digest = "layers:427de7aac467f39db567c9c2546e09cb7b47ce80916a221c2dae822dd145d1bd"
+config_digest = "config:86b88be6072cd2b07abe92f3036236d5874e6f373f31e820d44d2678dce70d6d"
+source_sha256 = "f4ebcb1d29bf4e7a4ccba183eedae1621aeb9732e2f79c136d1a2c9c9afd3871"
+gpus = 1
+gpu_types = ["B300"]
+cpus = 16
+memory_mb = 131072
+storage_mb = 262144
+network_mode = "no-network"
+
+[x-ai4ai.container]
+shm_size = "4g"
+pids_limit = 8192
+
+[x-ai4ai.gpu]
+type = "B300"
+peak_memory_mib = 236666
+
+[assets]
+"models/training_start" = "Qwen/Qwen2.5-Coder-1.5B-Instruct@2e1fd397ee46e1388853d2af2c993145b0f1098a"
+"data/codeforces_cots" = "open-r1/codeforces-cots@39ac85c150806230473c70ad72c31f6232fe3f41, fixed 8133-row Python subset"
+"data/livecodebench_public" = "LiveCodeBench v4/v5 public export, exploration only"
+"data/livecodebench_final" = "LiveCodeBench v6 test6.jsonl, all 175 rows, score only"
+
+[metadata]
+track = "v1"
+shipped_method = "completion_only_code_sft"
+shipped_method_source = "huggingface/open-r1@1416fa0"
+base_model = "Qwen/Qwen2.5-Coder-1.5B-Instruct@2e1fd397"
+train_data = "fixed 8133-row Python decontaminated CodeForces subset; shipped split is 8005 train + 128 validation"
+fast_metric = "livecodebench_public_pass_at_1"
+fast_direction = "max"
+final_metric = "livecodebench_v6_pass_at_1_full175"
+final_direction = "max"

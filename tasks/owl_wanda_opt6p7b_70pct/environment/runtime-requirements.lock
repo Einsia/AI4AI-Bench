@@ -1,0 +1,64 @@
+# Resolved against the base image's own environment and pinned by hash.
+#
+# Produced by `pip install --dry-run --report` inside the base image, so this is the set
+# that would actually be *added* to owl_wanda_opt6p7b_70pct's base -- not a standalone closure. The
+# previous approach resolved with `pip download` plus dependencies, which knows nothing
+# about what is already installed: it pulled torch 2.13.0 over the base's 2.8.0 and the
+# build then failed `pip check`, because torchaudio and torchvision are built against
+# 2.8.0. A lock that overwrites its own base cannot pin anything.
+#
+# Fetched with the base image's interpreter, since several pins have no wheel for the
+# node's python3.12.
+
+accelerate==0.18.0 \
+    --hash=sha256:41a84ac94407d7dcf030caf0cdadc70496594aec27ea680207bdb15b95f8a602
+datasets==2.11.0 \
+    --hash=sha256:d946cdb8c4885d3016a2ab3129c9403dd3358fe9107e8ab5e549ceab672774af
+dill==0.3.6 \
+    --hash=sha256:a07ffd2351b8c678dfc4a856a3005f8067aea51d6ba6c700796a4d9e280f39f0
+huggingface-hub==0.14.1 \
+    --hash=sha256:9fc619170d800ff3793ad37c9757c255c8783051e1b5b00501205eb43ccc4f27
+fsspec==2023.3.0 \
+    --hash=sha256:bf57215e19dbfa4fe7edae53040cc1deef825e3b1605cca9a8d2c2fadd2328a0
+multiprocess==0.70.14 \
+    --hash=sha256:7dc1f2f6a1d34894c8a9a013fbc807971e336e7cc3f3ff233e61b9dc679b3b5c
+numpy==1.24.4 \
+    --hash=sha256:7215847ce88a85ce39baf9e89070cb860c98fdddacbaa6c0da3ffb31b3350bd5
+pandas==1.5.3 \
+    --hash=sha256:5f2b952406a1588ad4cad5b3f55f520e82e902388a6d5a4a91baa8d38d23c7f6
+protobuf==3.20.3 \
+    --hash=sha256:a7ca6d488aa8ff7f329d4c545b2dbad8ac31464f1d8b1c87ad1346717731e4db
+pyarrow==12.0.1 \
+    --hash=sha256:e2c9cb8eeabbadf5fcfc3d1ddea616c7ce893db2ce4dcef0ac13b099ad7ca082
+scipy==1.10.1 \
+    --hash=sha256:15a35c4242ec5f292c3dd364a7c71a61be87a3d4ddcc693372813c0b73c9af1d
+sentencepiece==0.1.99 \
+    --hash=sha256:db361e03342c41680afae5807590bc88aa0e17cfd1a42696a160e4005fcda03b
+setuptools==75.8.0 \
+    --hash=sha256:e3982f444617239225d675215d51f6ba05f845d4eec313da4418fdbb56fb27e3
+transformers==4.28.1 \
+    --hash=sha256:f30a006220d0475789ac0e7c874f51bf5143956797616d89975b637883ce0be6
+responses==0.18.0 \
+    --hash=sha256:15c63ad16de13ee8e7182d99c9334f64fd81f1ee79f90748d527c28f7ca9dd51
+tokenizers==0.13.3 \
+    --hash=sha256:9ba2b0bf01777c9b9bc94b53764d6684554ce98551fec496f71bc5be3a03e98b
+aiohttp==3.14.3 \
+    --hash=sha256:53e7b4ce82b54a8bcc71b3b67a5cbd177ca1d7f592cbc92cd38b7349f73482db
+multidict==6.7.1 \
+    --hash=sha256:439cbebd499f92e9aa6793016a8acaa161dfa749ae86d20960189f5398a19144
+yarl==1.24.5 \
+    --hash=sha256:570fec8fbd22b032733625f03f10b7ff023bc399213db15e72a7acaef28c2f4e
+aiohappyeyeballs==2.7.1 \
+    --hash=sha256:9243213661e29250eb41368e5daa826fc017156c3b8a11440826b2e3ed376472
+aiosignal==1.4.0 \
+    --hash=sha256:053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e
+frozenlist==1.8.0 \
+    --hash=sha256:2552f44204b744fba866e573be4c1f9048d6a324dfe14475103fd51613eb1d1f
+propcache==0.5.2 \
+    --hash=sha256:5aaa2b923c1944ac8febd6609cb373540a5563e7cbcb0fd770f75dace2eb817b
+python-dateutil==2.9.0.post0 \
+    --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
+regex==2026.7.19 \
+    --hash=sha256:09f3e5287f94f17b709dc9a9e70865855feee835c861613be144218ce4ca82cc
+xxhash==3.8.1 \
+    --hash=sha256:ad52a0e4bcc0ba956a953a169d1feec2734a64981d689e4fc8f490f7bf91af60

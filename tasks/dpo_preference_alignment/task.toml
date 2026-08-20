@@ -1,0 +1,58 @@
+schema_version = "1.5"
+name = "dpo_preference_alignment"
+
+[task]
+name = "ai4ai/dpo-preference-alignment"
+version = "1.1.0"
+description = "Improve pairwise DPO alignment of a fixed 7B SFT policy, scored on IFEval"
+
+[agent]
+timeout_sec = 14400
+
+[verifier]
+timeout_sec = 97200
+environment_mode = "separate"
+
+[x-ai4ai.formal]
+retrain_budget_sec = 43200
+artifact_limit = 3
+selection_rule = "best_valid_of_up_to_3"
+
+[environment]
+dockerfile = "environment/Dockerfile"
+image = "docker.io/chiyizhe/ai4ai@sha256:b020d14e02f9088aca1c0015eeefb4a78758a4e18516114a0a2c8f2f3d9be820"
+digest = "layers:a985e87574315df35ee1231209ed3a5856e0038a62544ba946cd3a5a1d798797"
+config_digest = "config:10672bad33e4104021f512cf41b9bc25c56d63103d2cf59734c0443f4ac452a2"
+source_sha256 = "1bffd234b74863ab754db712a5ef6cbe197ab25f39bf05c503a5cc27c92794ea"
+gpus = 1
+gpu_types = ["B300"]
+cpus = 8
+memory_mb = 65536
+storage_mb = 131072
+network_mode = "no-network"
+build_args = { SOURCE_DATE_EPOCH = "1767225600" }
+
+[x-ai4ai.container]
+shm_size = "2g"
+pids_limit = 4096
+
+[x-ai4ai.gpu]
+type = "B300"
+peak_memory_mib = 19720
+
+[assets]
+"models/policy_start" = "Mistral-7B-v0.1@27d67f1b plus zephyr-7b-sft-qlora@156bec57, merged"
+"data/ultrafeedback" = "HuggingFaceH4/ultrafeedback_binarized@3949bf5f8c17c394422ccfab0c31ea9c20bdeb85"
+"data/ifeval_proxy" = "128-row exploration-only projection"
+"data/ifeval_final" = "google/IFEval@966cd89545d6b6acfd7638bc708b98261ca58e84, score only"
+
+[metadata]
+track = "v1"
+shipped_method = "pairwise_dpo_qlora"
+shipped_method_source = "alignment-handbook@1de1fc996972aa76b7d40c64c07b66dec8b6976a"
+base_model = "fixed merged Zephyr/Mistral 7B SFT start"
+train_data = "all 61135 train_prefs rows at UltraFeedback revision 3949bf5f"
+fast_metric = "ifeval_strict_accuracy_public128"
+fast_direction = "max"
+final_metric = "ifeval_strict_accuracy_hidden413"
+final_direction = "max"

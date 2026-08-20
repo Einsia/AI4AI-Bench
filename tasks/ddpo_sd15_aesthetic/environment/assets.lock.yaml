@@ -1,0 +1,173 @@
+schema_version: 2
+task_id: ddpo_sd15_aesthetic
+
+# Every path here is an alias. A deployment profile maps aliases onto real
+# directories, so the repository carries no host layout.
+path_policy: repo_relative_aliases
+
+build_contexts:
+  network: none
+  # All contexts are materialized on the host: the pinned upstream tree, the
+  # offline git Debian payload, and the locked runtime wheel directory.
+  names: [ddpo_source, git_deb, wheelhouse]
+  reproducibility: two network-disabled builds must agree before a digest is recorded
+
+assets:
+  ddpo_source:
+    kind: git_repository
+    source: https://github.com/kvablack/ddpo-pytorch.git
+    revision: 1958463f020112c9a7bc85768d296daacc2e1b4b
+    license: MIT
+    license_source: >-
+      https://github.com/kvablack/ddpo-pytorch/blob/1958463f020112c9a7bc85768d296daacc2e1b4b/LICENSE
+    content_sha256: 5fd4c5cae679754baad21a98bfdcbcb41c1db8237b53ea536e80f8588cfe8edf
+    hash_kind: tree_manifest_sha256
+    size_bytes: 4158024
+    expected_files: 19
+    patch: environment/offline_assets_and_epoch_zero_save.patch
+    patch_sha256: cd72b330cc21b50366b0af67d38e992a657d71e7fd6b67b81afcb54b0119efeb
+    copied_to:
+      - /workspace/ddpo-pytorch   # the Agent's, editable, enters candidate.patch
+      - /opt/harness/ddpo-pytorch # the reward and the prompt list, read-only
+    note: >-
+      Copied twice on purpose. The official aesthetic scorer in this tree is both the
+      training reward and the scoring-time metric, so one shared copy would let a
+      candidate edit what it is measured on. Not pip-installed and not on PYTHONPATH:
+      ddpo_pytorch has no __init__.py, so with both copies importable the namespace
+      package merges them -- measured, and the reason grade.py scrubs sys.path.
+
+  wheelhouse:
+    kind: wheel_directory
+    requirements: environment/runtime-requirements.in
+    note: >-
+      Version- and hash-pinned by environment/runtime-requirements.lock. The lock was
+      resolved inside this task's B300-compatible base image and records the sha256 of
+      every wheel byte installed by the network-disabled build.
+
+  models/stable-diffusion-v1-5:
+    kind: diffusion_model
+    source: stable-diffusion-v1-5/stable-diffusion-v1-5
+    revision: 451f4fe16113bff5a5d2269ed5ad43b0592e9a14
+    license: CreativeML Open RAIL-M
+    license_source: >-
+      https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/tree/451f4fe16113bff5a5d2269ed5ad43b0592e9a14
+    download:
+      tool: huggingface_hub.snapshot_download
+      repo_id: stable-diffusion-v1-5/stable-diffusion-v1-5
+      revision: 451f4fe16113bff5a5d2269ed5ad43b0592e9a14
+      allow_patterns:
+        - .gitattributes
+        - README.md
+        - feature_extractor/preprocessor_config.json
+        - model_index.json
+        - safety_checker/config.json
+        - safety_checker/model.safetensors
+        - scheduler/scheduler_config.json
+        - text_encoder/config.json
+        - text_encoder/model.safetensors
+        - tokenizer/merges.txt
+        - tokenizer/special_tokens_map.json
+        - tokenizer/tokenizer_config.json
+        - tokenizer/vocab.json
+        - unet/config.json
+        - unet/diffusion_pytorch_model.safetensors
+        - v1-inference.yaml
+        - vae/config.json
+        - vae/diffusion_pytorch_model.safetensors
+    # Recomputed with the canonical regular_tree_manifest JSON algorithm.
+    content_sha256: c3a9370a8be620b518b5fd73a4be3a8f2d88e513cdcad56663ba2f9a1d3d9f67
+    hash_kind: tree_manifest_sha256
+    size_bytes: 5482670082
+    expected_files: 18
+    mount: /assets/models/stable-diffusion-v1-5
+    phases: [explore, retrain, score]
+    note: >-
+      The training start. safetensors only -- the .bin duplicates and the hub's cache
+      metadata are excluded, which is what the tree hash above covers.
+
+  models/clip:
+    kind: frozen_reward_and_diagnostic_model
+    source: openai/clip-vit-large-patch14
+    revision: 32bd64288804d66eefd0ccbe215aa642df71cc41
+    license: MIT
+    license_source: >-
+      https://huggingface.co/openai/clip-vit-large-patch14/tree/32bd64288804d66eefd0ccbe215aa642df71cc41
+    download:
+      tool: huggingface_hub.snapshot_download
+      repo_id: openai/clip-vit-large-patch14
+      revision: 32bd64288804d66eefd0ccbe215aa642df71cc41
+      allow_patterns:
+        - .gitattributes
+        - README.md
+        - config.json
+        - merges.txt
+        - model.safetensors
+        - preprocessor_config.json
+        - special_tokens_map.json
+        - tokenizer.json
+        - tokenizer_config.json
+        - vocab.json
+    # Recomputed with the canonical regular_tree_manifest JSON algorithm.
+    content_sha256: 97dce8fcf1f1833163bf46dfdbae6406675b440079961a0d4d0556a9f26ea724
+    hash_kind: tree_manifest_sha256
+    size_bytes: 1714265650
+    expected_files: 10
+    mount: /assets/models/clip
+    phases: [explore, retrain, score]
+    note: >-
+      Does triple duty: the image embedding the aesthetic MLP consumes, the text
+      embedding the alignment diagnostic uses, and the image-image similarity the diversity
+      diagnostic uses. Mounted into training too, because the aesthetic score IS the
+      training reward -- unlike the reference task, whose grader is a scoring-time
+      input only. The MLP half of the reward ships inside ddpo_source at
+      ddpo_pytorch/assets/sac+logos+ava1-l14-linearMSE.pth.
+
+  data/final_reference.json:
+    kind: evaluation_protocol
+    mount: /assets/data/final_reference.json
+    phases: [score]
+    content_sha256: c467aad251db3692d863d8fdfb7f3a7edccdc0af144e11c12f0856133ef04d24
+    hash_kind: file_sha256
+    size_bytes: 286
+    # Canonical serialisation: json.dumps(value, indent=2, sort_keys=True) + "\n".
+    # Materialise it with exactly that and the hash above reproduces.
+    content:
+      schema_version: 1
+      task_id: ddpo_sd15_aesthetic
+      samples: 256
+      generation_seed: 20269702
+      training_start:
+        mean_aesthetic_score: 5.395526885986328
+        mean_clip_alignment: 0.23205599188804626
+        mean_pairwise_clip_distance: 0.360897958278656
+    note: >-
+      The final's whole protocol, and the only held-out thing this task has. There is
+      no test-set file to withhold: the dataset is generated, so a tier is identified
+      by (samples, generation_seed) and nothing else. Mounted into score and NOT into
+      explore, for the same reason the reference task withholds its AIME questions --
+      with 45 prompts and one latent per row, an Agent that knows the seed knows the
+      exact 256 images the result is reported on.
+
+      training_start is retained as legacy provenance for the pinned base model, but
+      alignment and diversity are auxiliary metrics only and do not gate the score.
+      The sample count and generation seed still travel with the reference because
+      they define the held-out generation stream.
+
+      Deliberately not hash-pinned inside final_eval.py. Rotating the seed is a
+      legitimate operation -- it draws a fresh held-out sample -- and pinning the hash
+      in the image would require a rebuild to do it. The lock is the pin; the evaluator
+      records the hash it actually read into resolved_config.json.
+
+notes:
+  - >-
+    The prompt distribution is not an asset entry, and that is not an omission. It is
+    ddpo_pytorch/assets/simple_animals.txt inside ddpo_source: 45 single-word animal
+    names, drawn with random.choice. Code, not data, so it is baked into the image and
+    both copies hold the whole list. check_image.py asserts 45 in both trees, because
+    "mount the whole de-contaminated source" has no meaning for a mount that does not
+    exist -- what replaces it is that the container cannot hold a subset.
+  - >-
+    The reference protocol's lock recorded prompts.py (1830 bytes, sha256 7422d2d3...) as a
+    separate asset of kind finite_code_defined_distribution, and did NOT record
+    simple_animals.txt. It hashed the code that reads the prompt list and not the list
+    itself. Both are covered here by the ddpo_source tree hash.

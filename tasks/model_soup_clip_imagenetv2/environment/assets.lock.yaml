@@ -1,0 +1,227 @@
+schema_version: 2
+task_id: model_soup_clip_imagenetv2
+
+# Every path here is an alias. A deployment profile maps aliases onto real
+# directories, so the repository carries no host layout.
+path_policy: repo_relative_aliases
+
+build_contexts:
+  network: none
+  # The reference protocol built with network enabled and pip-installed CLIP from a git URL
+  # at build time. The three contexts below replace that. git_deb is the third and
+  # it is new: the base image changed -- see the Dockerfile -- and no
+  # pytorch/pytorch image carries git, which both submit.sh and the build's own
+  # `git -C /workspace init` need.
+  names: [model_soups_source, wheelhouse, git_deb]
+  reproducibility: >-
+    The layers digest identifies one built artifact; source_sha256 independently
+    attests the image inputs because the available builder does not normalize every
+    layer timestamp.
+
+assets:
+  model_soups_source:
+    kind: git_repository
+    source: https://github.com/mlfoundations/model-soups.git
+    revision: d5398f181ea51c5cd9d95ebacc6ea7132bb108ec
+    license: MIT
+    license_source: >-
+      https://github.com/mlfoundations/model-soups/blob/d5398f181ea51c5cd9d95ebacc6ea7132bb108ec/LICENSE
+    content_sha256: 6f4cd90d5de432b7b15f61048bbfd234edf218b974acfdc182263b02bae93804
+    hash_kind: tree_manifest_sha256
+    size_bytes: 10559814
+    file_count: 36
+    used_for:
+      - utils.py -> get_model_from_sd, baked into /opt/harness/model_soups
+    note: >-
+      Baked into the image rather than mounted, for the reason OPD bakes the
+      JustRL grader: get_model_from_sd decides which module a state dict becomes,
+      so it is part of the evaluator's definition of the architecture rather than
+      part of the method. main.py is deliberately not copied -- it downloads
+      checkpoints, and it is the only file in this tree with a use for a network.
+      The datasets package is not copied because utils.py does not import it; row
+      selection is implemented by harness/grade.py over the mounted tree.
+
+  models/ingredients:
+    kind: fixed_checkpoint_set
+    source: mlfoundations/model-soups release v0.0.2
+    revision: v0.0.2
+    license: maintainer_release_component_terms
+    license_source: https://github.com/mlfoundations/model-soups/releases/tag/v0.0.2
+    content_sha256: f03c75f7f075b3596ad0e35359337d5ed20b7fad381b341603af03009a978fea
+    hash_kind: tree_manifest_sha256
+    file_count: 72
+    filename_pattern: model_*.pt
+    download_url_pattern: https://github.com/mlfoundations/model-soups/releases/download/v0.0.2/model_{0..71}.pt
+    size_bytes: 32825674296
+    materialize:
+      sources:
+        checkpoints:
+          tool: url_set
+          url_template: https://github.com/mlfoundations/model-soups/releases/download/v0.0.2/model_{index}.pt
+          filename_template: model_{index}.pt
+          start: 0
+          end: 71
+    mount: /assets/models/ingredients
+    phases: [explore, retrain, score]
+    note: >-
+      All 72, in every phase that needs them, and the whole set in each. A partial
+      mount would break the task in two directions: the baseline is the average of
+      all 72, and the score-time artifact check solves the exported weights against
+      the whole basis, so a missing ingredient would make a legal soup look like a
+      violation. 30.6 GiB, ~456 MiB per file.
+
+      Mounted into the SCORING phase as well, which no other asset of this kind is
+      in this repository. "This checkpoint is a combination of the 72" cannot be
+      answered without the 72.
+
+  models/clip:
+    kind: model_cache
+    source: OpenAI CLIP ViT-B/32
+    revision: ViT-B-32.pt
+    license: MIT
+    license_source: https://github.com/openai/CLIP/blob/main/LICENSE
+    # Compact-JSON regular-tree manifest of the flattened one-file alias.
+    content_sha256: 9ceb06d4f53ad5757e5c12ca039ef499756353bd72b39bcaf1f4a62b1a446fe2
+    hash_kind: tree_manifest_sha256
+    # The payload's own sha256, recorded separately from the tree manifest because it is
+    # the number that can be checked against an external authority: it is the checksum
+    # OpenAI publishes for ViT-B/32, the one clip/clip.py itself verifies a download
+    # against. MEASURED equal to it on the staged file. A tree manifest cannot be checked
+    # that way -- it is a property of a layout as well as of bytes.
+    payload_sha256: 40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af
+    payload_filename: ViT-B-32.pt
+    download_url: https://openaipublic.azureedge.net/clip/models/40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af/ViT-B-32.pt
+    # A removed staging script briefly backfilled the line-manifest value below while
+    # labelling it tree_manifest_sha256. Keep it only as migration evidence; it is not
+    # accepted by the release verifier.
+    superseded_line_manifest_sha256: 844b8569420dfcf8767669edef806b676b36452e52447d10daefdfa0a2a86ccb
+    file_count: 1
+    size_bytes: 353976522
+    mount: /assets/models/clip
+    phases: [explore, retrain, score]
+    layout_note: >-
+      The staged copy arrived with the payload one level deep, at
+      40f5484c1c74edd83cb9cf687c6ab92b28d8b656/ViT-B-32.pt, and was flattened to
+      ViT-B-32.pt directly under the alias. That was the right fix and the reason is
+      harness/forward.py:46: clip.load("ViT-B/32", ..., download_root=str(clip_cache)),
+      and OpenAI CLIP resolves download_root/<basename of the model URL>, i.e.
+      download_root/ViT-B-32.pt. One level deeper and the file is not found; the container
+      has no network, so the failure is a download attempt that cannot succeed rather than
+      a missing-file message.
+      Flattening changes the tree manifest without changing a byte of payload, because
+      tree_manifest_sha256 hashes compact sorted-key JSON records containing path, sha256,
+      and size_bytes. The manifest above is the flat one.
+    note: >-
+      The base module get_model_from_sd fills in, and the source of the image
+      preprocessing. clip.load is called with download_root pointing here and the
+      container has no network, so it resolves locally or fails.
+
+      THIS MOUNT IS USED. An earlier review of this task concluded it was dead and
+      suggested removing it; that was wrong, and forward.py:46 is the refutation -- it is
+      the download_root argument, so both the search and the evaluator need it. Verified by
+      running the real path: a CLIP forward pass in the built image with this mount resolved
+      the module from it in 3.7 s with no network, and the same load happens inside every
+      retrain and every score.
+
+  data/imagenetv2_final:
+    kind: evaluation_dataset
+    source: https://github.com/modestyachts/ImageNetV2
+    revision: matched-frequency-format-val-v1
+    license: ImageNetV2 and ImageNet image component terms
+    license_source: https://github.com/modestyachts/ImageNetV2
+    content_sha256: 871c60cef6bafeccbbdc06bac5302c31b72f7af5ee997e7cc35f6a41a417ad48
+    hash_kind: tree_manifest_sha256
+    archive_sha256: f0c37fdf925916b19ea1323cd9a2208cdb6959ba2c32eef2a7fc393835c9ca7c
+    download_url: https://huggingface.co/datasets/vaishaal/ImageNetV2/resolve/main/imagenetv2-matched-frequency.tar.gz
+    expected_classes: 1000
+    expected_examples_per_class: 10
+    file_count: 10000
+    size_bytes: 1244630473
+    materialize:
+      sources:
+        images:
+          tool: url
+          url: https://huggingface.co/datasets/vaishaal/ImageNetV2/resolve/main/imagenetv2-matched-frequency.tar.gz
+          filename: imagenetv2-matched-frequency.tar.gz
+          sha256: f0c37fdf925916b19ea1323cd9a2208cdb6959ba2c32eef2a7fc393835c9ca7c
+          extract: true
+          strip_components: 1
+    mount: /assets/data/imagenetv2_final
+    phases: [score]
+    offsets: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    note: >-
+      The whole de-contaminated source, untouched, and the final scores all of it.
+      The reference protocol split this tree three ways and reported only offsets 5-9, so
+      the final was 5000 rows; v1 has no middle tier to feed, and reuniting them
+      takes the binomial standard error near p=0.686 from 0.0066 to 0.0046 for one
+      extra forward pass over images already on disk.
+
+      Not mounted during exploration. The 2000-row projection below is.
+
+  data/imagenetv2_proxy:
+    kind: derived_dataset
+    derived_from: data/imagenetv2_final
+    status: materialized
+    content_sha256: 84a32484d0fd29a7c6dff61a2d78959b692f341a40eb92838ea0c886b20095ea
+    hash_kind: tree_manifest_sha256
+    superseded_line_manifest_sha256: 39e0bfc02dc3a58e594fe4c6d5f16f2a80a271579a9919df325c1e880862a3f2
+    size_bytes: 253261947
+    expected_classes: 1000
+    expected_examples_per_class: 2
+    file_count: 2000
+    offsets: [0, 1]
+    mount: /assets/data/imagenetv2_proxy
+    phases: [explore, retrain]
+    # harness/final_eval.py re-derives offsets 0-1 from the full tree. The staging
+    # tool verifies this materialized projection against the same selection rule.
+    selection_rule: >-
+      For each of the 1000 numeric class directories, sort its image files by name
+      and copy the first two, preserving the directory name and the file names. The
+      result is the same layout with two files per class instead of ten.
+    derivation: |
+      python3 - <<'PY'
+      from pathlib import Path
+      import shutil
+      source = Path("<data/imagenetv2_final>")
+      target = Path("<data/imagenetv2_proxy>")
+      for directory in sorted(source.iterdir()):
+          if not directory.is_dir():
+              continue
+          keep = sorted(p for p in directory.iterdir() if p.is_file())[:2]
+          (target / directory.name).mkdir(parents=True, exist_ok=True)
+          for path in keep:
+              shutil.copy2(path, target / directory.name / path.name)
+      PY
+    materialize:
+      sources:
+        final:
+          alias: data/imagenetv2_final
+      builder:
+        type: task_image
+        image: docker.io/chiyizhe/ai4ai@sha256:25d70889946756e8c1ef386a30f1d4aaa7c165f9371eb9638d39c3bbcccca2e1
+        script: tools/asset_builders/project_imagenetv2.py
+        script_sha256: 25e515074571be2b353d45f601d430b174ec6c3e0e08967b3d1e24a5d9e360ba
+        command:
+          - python3
+          - /builder/repo/tools/asset_builders/project_imagenetv2.py
+          - --source
+          - "{alias:data/imagenetv2_final}"
+          - --output
+          - "{output}"
+    record_after_materializing: content_sha256, hash_kind, size_bytes
+    note: >-
+      A materialized projection rather than a view, and that is the point. If the
+      exploration container held all 10000 files, "the proxy is offsets 0-1" would
+      be a request rather than a fact -- 80% of the final's rows would be sitting in
+      a readable mount. A 2000-file tree makes the split structural, the same way
+      OPD's explore phase has a math500 entry and no aime entry.
+
+      The rule above is the dullest one available on purpose: it has to be
+      reproduced in two places that never see each other. harness/grade.py's
+      class_offsets re-derives the same ordering from the full tree, so the final
+      knows which of its 10000 rows are the proxy rows without a manifest shipped
+      between them. A manifest would be one more thing to keep in sync, and the
+      failure would be silent -- the three-number report would still print, against
+      the wrong partition.
+
+      Overlap with the final is 2000/10000 = 20%, inside the v1 cap of 50%.

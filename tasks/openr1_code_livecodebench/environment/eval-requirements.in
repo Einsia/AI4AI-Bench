@@ -1,0 +1,18 @@
+# Incremental dependencies for the scoring image. The base is the task's own
+# training image, so this file lists what is ADDED to it, not a full environment.
+#
+# Why a separate image at all: the training image pins trl==0.9.6, which requires
+# transformers==4.46.1, while vLLM 0.11.0 requires transformers>=4.55.2. They are
+# mutually exclusive, and scoring imports neither trl nor peft. Upstream
+# huggingface/open-r1 separates the two the same way.
+#
+# NumPy is not a conflict: the sibling RAGEN image already runs vLLM 0.11.0 on
+# numpy 1.26.4.
+vllm==0.11.0
+transformers==4.55.4
+numpy==1.26.4
+# LiveCodeBench's evaluator uses pebble for its per-program execution timeouts;
+# datasets and pyarrow back its loaders.
+pebble==5.1.1
+datasets==3.1.0
+pyarrow==17.0.0

@@ -1,0 +1,161 @@
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+#
+# The conda environment DiGress needs, built ONCE, WITH network. Not part of the task
+# build.
+#
+#   docker build -f tasks/digress_qm9_graph_diffusion/environment/Dockerfile.base \
+#     -t ai4ai/digress-base:v1 .
+#
+# WHY THIS FILE EXISTS
+#
+# Every other task in the portfolio starts from a base image pulled by digest --
+# `FROM pytorch/pytorch:2.8.0-cuda12.8-cudnn9-devel@sha256:a7103283...`. Somebody built
+# that with network; we consume fixed bytes. The task layer on top then builds with
+# `--network=none`, and that is what makes the task's own build reproducible and its
+# asset lock honest.
+#
+# DiGress was the one task that tried to *create* its base inline: apt-get install,
+# micromamba install and pip install, all in the file that builds with `--network=none`.
+# Those three lines can never succeed under that flag, so the task could not be built at
+# all. Splitting the file puts DiGress in the same shape as the other eight rather than
+# inventing a mechanism for it.
+#
+# What is NOT weakened by building this with network: the task layer still builds
+# offline, the base is still pinned by content (the caller records its layers
+# fingerprint and the task Dockerfile names it by digest), and the package versions were
+# already pinned here to exact versions. What IS weaker than the other eight: their
+# bases are public images anyone can re-pull by digest, and this one exists only on
+# hosts where it has been built. Recorded rather than papered over.
+#
+# THIS IS THE ONLY CONDA-BASED IMAGE IN THE PORTFOLIO. Two consequences, both checked
+# at build time below rather than left to be discovered at run time:
+#
+#   1. The Agent runs inside this image and /opt/harness/submit.sh needs `git`.
+#      Without it there is no candidate.patch at all, and the 12 h phase would
+#      train the pristine baseline while every log looked healthy.
+#   2. `docker exec ... bash -lc` and the orchestrator's own `bash -lc` wrapper do
+#      not go through micromamba's entrypoint, so the conda environment is NOT
+#      activated for them. PATH is set explicitly below instead of relying on
+#      activation.
+
+FROM mambaorg/micromamba:1.5.8@sha256:475730daef12ff9c0733e70092aeeefdf4c373a584c952dac3f7bdb739601990
+
+ARG MAMBA_DOCKERFILE_ACTIVATE=1
+USER root
+
+# When apt is routed through a CONNECT proxy, two separate settings
+# have to be arranged, and each fails differently:
+#
+#   1. apt does not read HTTPS_PROXY from the environment. It needs a file under
+#      /etc/apt/apt.conf.d/. Without it: "Temporary failure resolving deb.debian.org".
+#   2. The tunnel only implements CONNECT, so it cannot forward a plain HTTP GET. This
+#      base's sources are `URIs: http://deb.debian.org/...` (deb822 format, in
+#      sources.list.d/debian.sources -- there is no /etc/apt/sources.list here), and
+#      over http the proxy answers `405 Method Not Allowed`. Rewriting to https makes
+#      every request a CONNECT, which the tunnel does forward. Measured: 9.4 MB of
+#      package lists in 1s.
+#
+# ca-certificates is already present in this base, so https works before it is
+# installed -- the ordering that would otherwise be circular.
+#
+# A proxy, when needed, is supplied as a BuildKit secret rather than an ARG. ARG values
+# are recoverable from image history, and deleting 99proxy in a later RUN still leaves
+# it in a lower layer.  Creating, using, and deleting it in this one RUN keeps both the
+# credential and the file out of the resulting image.  With no secret mounted the build
+# uses the host's direct network.
+#
+#   docker build --secret id=apt_proxy,env=HTTPS_PROXY ...
+#
+# git is a RUNTIME dependency here, not only a build-time one: submit.sh shells out
+# to it. bash and coreutils come from the Debian base and are what the agent's
+# `bash -lc`, `tee`, `stdbuf` and `grep` calls need. Do not trim this line to
+# "build-essential only" on the grounds that nothing compiles at run time.
+RUN --mount=type=secret,id=apt_proxy,required=false \
+    if [ -r /run/secrets/apt_proxy ]; then \
+         APT_PROXY="$(cat /run/secrets/apt_proxy)"; \
+       else \
+         APT_PROXY=""; \
+       fi \
+    && if [ -n "$APT_PROXY" ]; then \
+         printf 'Acquire::http::Proxy "%s";\nAcquire::https::Proxy "%s";\n' \
+           "$APT_PROXY" "$APT_PROXY" > /etc/apt/apt.conf.d/99proxy \
+         && sed -i 's,http://deb.debian.org,https://deb.debian.org,' \
+              /etc/apt/sources.list.d/debian.sources; \
+       fi \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+       build-essential git libgl1 libglib2.0-0 ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /etc/apt/apt.conf.d/99proxy
+
+USER $MAMBA_USER
+RUN --mount=type=secret,id=apt_proxy,required=false,mode=0444 \
+    if [ -r /run/secrets/apt_proxy ]; then \
+         BUILD_PROXY="$(cat /run/secrets/apt_proxy)"; \
+       else \
+         BUILD_PROXY=""; \
+       fi \
+    && HTTP_PROXY="$BUILD_PROXY" HTTPS_PROXY="$BUILD_PROXY" \
+       http_proxy="$BUILD_PROXY" https_proxy="$BUILD_PROXY" \
+       micromamba install --yes -n base \
+      -c pytorch -c nvidia -c conda-forge \
+      python=3.9 pytorch=2.0.1 pytorch-cuda=11.8 mkl=2023.1.0 \
+      rdkit=2023.03.2 graph-tool=2.45 pip=23.2.1 \
+    && micromamba clean --all --yes
+
+RUN --mount=type=secret,id=apt_proxy,required=false,mode=0444 \
+    if [ -r /run/secrets/apt_proxy ]; then \
+         BUILD_PROXY="$(cat /run/secrets/apt_proxy)"; \
+       else \
+         BUILD_PROXY=""; \
+       fi \
+    && HTTP_PROXY="$BUILD_PROXY" HTTPS_PROXY="$BUILD_PROXY" \
+       http_proxy="$BUILD_PROXY" https_proxy="$BUILD_PROXY" \
+       python -m pip install --no-cache-dir \
+      hydra-core==1.3.2 imageio==2.31.1 matplotlib==3.7.1 \
+      networkx==2.8.7 numpy==1.23.5 omegaconf==2.3.0 overrides==7.3.1 \
+      pandas==1.5.3 pyemd==1.0.0 PyGSP==0.5.1 pytorch-lightning==2.0.4 \
+      scipy==1.11.0 setuptools==68.0.0 torch-geometric==2.3.1 \
+      torchmetrics==0.11.4 tomli==2.0.1 tqdm==4.65.0 wandb==0.15.4
+
+USER root
+
+# Harness entry points invoke `python3` from login shells, so provide the name
+# explicitly in the micromamba environment.
+RUN ln -sf /opt/conda/bin/python3.9 /opt/conda/bin/python3 \
+    && /opt/conda/bin/python3 -V
+
+ENV PATH=/opt/conda/bin:$PATH \
+    CONDA_PREFIX=/opt/conda \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    WANDB_MODE=offline \
+    HYDRA_FULL_ERROR=1 \
+    PYTHONPATH=/workspace/digress \
+    HF_HUB_OFFLINE=1 \
+    # The container runs as the host's uid, which has no /etc/passwd entry here.
+    # getpass.getuser() falls back to pwd.getpwuid() and raises KeyError; wandb and
+    # matplotlib both call it. getuser() checks these first.
+    USER=agent \
+    LOGNAME=agent \
+    HOME=/tmp \
+    # /workspace/.git is created by root at build time and read by the host uid at
+    # run time, which trips git's dubious-ownership check. This is the only way to
+    # pre-authorize it without a writable global gitconfig.
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0=safe.directory \
+    GIT_CONFIG_VALUE_0=/workspace
+
+# Login shells rebuild PATH from /etc/profile; the profile drop-in keeps the conda
+# interpreter visible there while ENV covers non-login commands and build steps.
+RUN printf 'PATH=/opt/conda/bin:$PATH\nexport PATH\n' > /etc/profile.d/00-conda-path.sh \
+    # The proxy file is a build-time transport detail. Leaving even a loopback value
+    # in the runtime image makes an external deployment inherit a dead local setting.
+    && rm -f /etc/apt/apt.conf.d/99proxy \
+    && rm -rf /root/.cache /home/mambauser/.cache /tmp/* /tmp/.[!.]* /tmp/..?* \
+    && chmod 0644 /etc/profile.d/00-conda-path.sh
+
+# Assert the tool floor through the same login-shell path used by the agent.
+RUN bash -lc 'for tool in bash git python3 sed head; do \
+      command -v "$tool" >/dev/null 2>&1 || { echo "MISSING:$tool"; exit 1; }; \
+    done; echo "base tool floor OK through a login shell: $(python3 -V 2>&1)"'

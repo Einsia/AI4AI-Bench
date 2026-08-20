@@ -1,0 +1,9 @@
+# Do not replace the base image's torch, vLLM or Ray stack.
+huggingface-hub==0.36.2
+antlr4-python3-runtime==4.9.3
+latex2sympy2-extended[antlr4-9-3]==1.11.0
+math-verify==0.9.0
+psutil==7.2.2
+pyarrow==23.0.1
+PyYAML==6.0.3
+wandb==0.28.0

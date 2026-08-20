@@ -1,0 +1,122 @@
+Make RAGEN run on this image's torch/vLLM, and make one board's trajectory
+reproducible independently of the batch it was submitted in.
+
+Applied once, at build time, to both copies of the tree -- /workspace/ragen and
+/opt/harness/ragen. On the reference protocol the same transform existed twice: as this
+patch, applied at runtime by the trainer, and as eight hardcoded string replacements
+inside the evaluator. Two spellings of one transform is how the trainer and the
+evaluator come to disagree about what they are running.
+
+The seeding half is protocol, not compatibility. Without it vLLM seeds the engine
+once and every request shares that stream, so a board's trajectory depends on which
+other boards were in the batch; with it the per-request seed is
+`sampling_seed + env_id`, which is what makes a 64-board bank and a 640-board stream
+report the same thing for the boards they share.
+
+REGENERATED WITH CONTEXT LINES, and nothing else changed. As first written every hunk
+here had zero context -- `@@ -24 +24 @@` -- and `git apply` refuses such a patch
+outright: with no context there is nothing to verify a hunk against, so the only way in
+is `--unidiff-zero`, which applies blindly at the recorded line numbers. That is the
+opposite of what the Dockerfile's `git apply --check` is for, and GNU patch reported a
+one-line offset on the agent_proxy hunk, which is exactly the drift the check is meant
+to catch. The transform was confirmed unchanged: the zero-context patch was applied
+with --unidiff-zero to a scratch copy of RAGEN@20daedc4, this version was applied to
+another, and the two trees are byte-identical -- all five files, and no sixth file
+touched. This version applies with a plain `git apply -p1`.
+
+diff --git a/ragen/workers/actor/dp_actor.py b/ragen/workers/actor/dp_actor.py
+--- a/ragen/workers/actor/dp_actor.py
++++ b/ragen/workers/actor/dp_actor.py
+@@ -21,7 +21,7 @@
+ from typing import Tuple
+
+ import torch
+-from flash_attn.bert_padding import index_first_axis, pad_input, rearrange, unpad_input
++from verl.utils.attention_utils import index_first_axis, pad_input, rearrange, unpad_input
+ from torch import nn
+ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+ import verl.utils.torch_functional as verl_F
+diff --git a/ragen/workers/critic/dp_critic.py b/ragen/workers/critic/dp_critic.py
+--- a/ragen/workers/critic/dp_critic.py
++++ b/ragen/workers/critic/dp_critic.py
+@@ -21,7 +21,7 @@
+
+ import torch
+ import torch.distributed
+-from flash_attn.bert_padding import index_first_axis, pad_input, rearrange, unpad_input
++from verl.utils.attention_utils import index_first_axis, pad_input, rearrange, unpad_input
+ from torch import nn, optim
+ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+ from verl import DataProto
+diff --git a/ragen/workers/fsdp_workers.py b/ragen/workers/fsdp_workers.py
+--- a/ragen/workers/fsdp_workers.py
++++ b/ragen/workers/fsdp_workers.py
+@@ -219,7 +219,7 @@
+
+         critic_model_config = AutoConfig.from_pretrained(
+             local_path,
+-            attn_implementation="flash_attention_2",
++            attn_implementation="sdpa",
+             trust_remote_code=config.model.get("trust_remote_code", False),
+         )
+         # TODO: VL models use VisionAttention, which directly uses flash_attention in transformers>=4.53
+diff --git a/ragen/llm_agent/ctx_manager.py b/ragen/llm_agent/ctx_manager.py
+--- a/ragen/llm_agent/ctx_manager.py
++++ b/ragen/llm_agent/ctx_manager.py
+@@ -24,8 +24,12 @@
+ from ragen.llm_agent.memory.base import BaseMemory
+ register_resolvers()
+
++def _is_qwen(tokenizer: AutoTokenizer):
++    vocabulary = tokenizer.get_vocab()
++    return "<|im_start|>" in vocabulary and "<|im_end|>" in vocabulary
++
+ def get_special_tokens(tokenizer: AutoTokenizer):
+-    if "qwen" in tokenizer.name_or_path.lower():
++    if _is_qwen(tokenizer):
+         special_token = tokenizer.encode("<|im_start|>")[0]
+         reward_token = tokenizer.encode("<|im_end|>")[0]
+     elif "llama-3" in tokenizer.name_or_path.lower():
+@@ -60,7 +64,7 @@
+             # Set the last token of the rows where all positions are False to True
+             reward_position[~reward_position.any(dim=-1), -1] = True
+             score_tensor[reward_position] = scores
+-        if "qwen" in tokenizer.name_or_path.lower():
++        if _is_qwen(tokenizer):
+             # for Qwen, there is a "\n" between special token and reward token, so we shift this to make sure reward is assigned to the last token of a turn
+             score_tensor = score_tensor.roll(shifts=1, dims=-1)
+     else:
+diff --git a/ragen/llm_agent/agent_proxy.py b/ragen/llm_agent/agent_proxy.py
+--- a/ragen/llm_agent/agent_proxy.py
++++ b/ragen/llm_agent/agent_proxy.py
+@@ -49,6 +49,7 @@
+         logprobs = _get_rollout_val_kwarg(ro_config, "logprobs", default=None)
+         log_stats_interval = getattr(ro_config, "log_stats_interval", None)
+         llm_kwargs = dict(
++            seed=int(config.sampling_seed),
+             enable_sleep_mode=True,
+             tensor_parallel_size=ro_config.tensor_model_parallel_size,
+             dtype=ro_config.dtype,
+@@ -79,7 +80,7 @@
+         )
+         if logprobs is not None:
+             sampling_kwargs["logprobs"] = logprobs
+-        self.sampling_params = SamplingParams(**sampling_kwargs)
++        self.sampling_kwargs = sampling_kwargs
+
+     def generate_sequences(self, lm_inputs: DataProto):
+         """
+@@ -96,7 +97,12 @@
+         input_texts = self.tokenizer.batch_decode(input_ids, skip_special_tokens=False)
+         input_texts = [i.replace("<|endoftext|>", "") for i in input_texts]
+
+-        outputs = self.llm.generate(input_texts, sampling_params=self.sampling_params)
++        sampling_params = [
++            SamplingParams(
++                **self.sampling_kwargs, seed=int(self.config.sampling_seed) + int(env_id)
++            ) for env_id in lm_inputs.non_tensor_batch["env_ids"]
++        ]
++        outputs = self.llm.generate(input_texts, sampling_params=sampling_params)
+         texts = [output.outputs[0].text for output in outputs]
+
+         # get the entropy of the response

@@ -1,0 +1,60 @@
+# Do not replace the base image's torch or CUDA stack.
+#
+# These pins define the task runtime. diffusers, transformers and accelerate are
+# load-bearing: the LoRA attention-processor API, the DDIM
+# scheduler's config round trip and Accelerate's automatic checkpoint naming all
+# changed shape in later releases.
+absl-py==2.5.0
+accelerate==0.20.3
+diffusers==0.17.1
+huggingface-hub==0.16.4
+inflect==6.0.4
+ml-collections==0.1.1
+pydantic==1.10.9
+transformers==4.30.2
+wandb==0.15.12
+
+# The tenth pin, and the only one that is not carried from the reference protocol: it is here
+# because the base image moved to torch 2.8.0/cu128, whose base ships numpy 2.3.2.
+#
+# Not a preference. wandb 0.15.12 executes, at import time,
+#
+#     NumberType.types.append(np.float_)        wandb/sdk/data_types/_dtypes.py:396
+#
+# and `np.float_` was removed in NumPy 2.0. With NumPy 2, the import fails with
+# `AttributeError: np.float_ was removed in the NumPy 2.0 release`. WANDB_MODE=disabled
+# does not help, because the failure is an import and not a run -- and the import is not
+# optional either: the chain is diffusers -> diffusers.utils.accelerate_utils ->
+# accelerate -> accelerate.tracking, which imports wandb unconditionally when it is
+# installed. So on numpy 2 this task cannot `import diffusers` at all.
+#
+# 1.26.4 is pinned rather than a floating numpy<2 constraint. Verified that torch
+# 2.8.0+cu128 and torchvision
+# 0.23.0+cu128 -- both built against numpy 2 headers -- work against it: from_numpy and
+# .numpy() round trip, a CUDA matmul runs, `pip check` is clean. That is numpy's
+# documented backward-compatibility direction (2.x headers, 1.19+ runtime), confirmed
+# here rather than taken on faith.
+numpy==1.26.4
+
+# runtime-requirements.lock now exists beside this file and is what the Dockerfile
+# installs, with --require-hashes --no-deps. This file stays as the statement of intent:
+# nine direct pins, from which the lock's 24 were resolved.
+#
+# Two of those 24 are not published as wheels, which is why
+# the operator wheelhouse resolver cannot produce this task's wheelhouse -- it resolves
+# with --only-binary :all: and pip answers
+#
+#   Could not find a version that satisfies the requirement ml-collections==0.1.1
+#   (from versions: 0.1.0, 1.0.0, 1.1.0)
+#
+# 0.1.1 is there, as an sdist only; 0.1.0 and 1.x are the versions with wheels.
+# pathtools==0.1.2, which wandb 0.15.12 requires, is in the same state.
+#
+# Both sdists are converted to wheels in this task's base image, then pinned by
+# byte hash so the image build remains offline. Reproduce with
+#
+#   pip download --no-deps --no-binary :all: --dest /sd ml-collections==0.1.1 pathtools==0.1.2
+#   pip wheel --no-deps --wheel-dir /sd/built /sd/*.tar.gz
+#
+# The lock records both source and wheel hashes. Keep ml-collections at the
+# upstream-compatible 0.1.1 API.

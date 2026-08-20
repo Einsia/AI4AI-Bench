@@ -1,0 +1,10 @@
+{
+  "_note": "Proxy-tier base-model diagnostic reference. Valid only for 64 rows at generation seed 20269700; fast_eval.sh does not attach it after either value is overridden.",
+  "_runs": 1,
+  "_tier": "64 rows, generation seed 20269700",
+  "mean_clip_alignment": 0.2358901440165937,
+  "mean_pairwise_clip_distance": 0.3402746915817261,
+  "n": 64,
+  "samples": 64,
+  "seed": 20269700
+}

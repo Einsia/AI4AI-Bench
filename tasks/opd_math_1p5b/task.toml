@@ -1,0 +1,66 @@
+schema_version = "1.5"
+name = "opd_math_1p5b"
+
+[task]
+name = "ai4ai/opd-math-1p5b"
+version = "1.0.0"
+description = "Improve a fixed 1.5B math reasoner using available training assets"
+
+[agent]
+timeout_sec = 14400
+
+[verifier]
+timeout_sec = 81000
+environment_mode = "separate"
+
+[x-ai4ai.formal]
+retrain_budget_sec = 43200
+artifact_limit = 3
+selection_rule = "best_valid_of_up_to_3"
+
+[environment]
+dockerfile = "environment/Dockerfile"
+image = "docker.io/chiyizhe/ai4ai@sha256:87c4dbbd1216502c6e18c893b77b37ea3b1d0becd7b08ee9d2514193a198a8f6"
+digest = "layers:759cbdb9ce51ac579ffc323044eeac13b7cdccc9d2c1248b0d35297897a893b9"
+config_digest = "config:7132549eb0c32299385c2242ec59600b7844139d38c2cfb8f928498dace02ec4"
+source_sha256 = "8d688fec8f74060fa5f9fc11309c9c837715aaaf6985d06edbb1b1803284060b"
+gpus = 1
+gpu_types = ["B300"]
+cpus = 8
+memory_mb = 131072
+storage_mb = 524288
+network_mode = "no-network"
+build_args = { SOURCE_DATE_EPOCH = "1767225600" }
+
+[x-ai4ai.container]
+shm_size = "24g"
+pids_limit = 8192
+
+[x-ai4ai.gpu]
+type = "B300"
+peak_memory_mib = 39568
+
+[assets]
+"models/student" = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B@ad9f0ae0864d7fbcd1cd905e3c6c5b069cc8b562"
+"models/teacher" = "hbx/JustRL-DeepSeek-1.5B@0637e4096c789c67f9eecbe8355e0bdeddede1c2"
+"models/verifier" = "opencompass/CompassVerifier-3B"
+"data/train.parquet" = "zero-overlap projection, sha256 c597e3857f5754a338c007e420909da562eca61f5ceb0ecf8a1200f0e5dc6e19"
+"data/math500" = "JustRL@cf444e99 data/MATH-500/test.parquet"
+"data/aime" = "AI-MO/aimo-validation-aime@13f9e12f plus opencompass/AIME2025@a6ad95f6, score only"
+
+[metadata]
+track = "v1"
+shipped_method = "sampled_token_on_policy_distillation"
+shipped_method_source = "thunlp/OPD@4532fd35ccfdde82adc918b265e4c964534e83d1 verl_example/opd.sh"
+verl = "volcengine/verl@7aed6b230776f963fa09509c10d9c3a767d1102c"
+base_model = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B@ad9f0ae0864d7fbcd1cd905e3c6c5b069cc8b562"
+teacher = "hbx/JustRL-DeepSeek-1.5B@0637e4096c789c67f9eecbe8355e0bdeddede1c2"
+train_data = "BytedTsinghua-SIA/DAPO-Math-17k@65877096c24ffa7abc4e4fa5edb95cf3413a5674, derived by opd-aime-zero-overlap-v2"
+train_rows = 15285
+grader_source = "JustRL@cf444e9920b599c865ee6742c88dc162dcabcec2 evals/utils.py"
+fast_metric = "math500_pass_at_1"
+fast_direction = "max"
+fast_protocol = "MATH-500, 500 questions by 4 samples, 12288-token generation cap"
+final_metric = "aime24_25_at32"
+final_direction = "max"
+final_protocol = "60 questions by 32 samples; AIME24 plus AIME25; rule grader with verifier fallback"

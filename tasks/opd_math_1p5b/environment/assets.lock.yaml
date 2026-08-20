@@ -1,0 +1,225 @@
+schema_version: 2
+task_id: opd_math_1p5b
+
+# Every path here is an alias. A deployment profile maps aliases onto real
+# directories, so the repository carries no host layout.
+path_policy: repo_relative_aliases
+
+build_contexts:
+  network: none
+  # verl is the submodule at environment/verl. The other two are materialized on
+  # the host: a JustRL tree at the pinned commit, and a wheel directory.
+  names: [verl_source, justrl_source, wheelhouse, agent_tools]
+  reproducibility: >-
+    two network-disabled no-cache builds must have identical normalized task
+    filesystem manifests. BuildKit may serialize that identical filesystem into
+    different raw layer tar orderings; select one attested build, record its layer
+    fingerprint, and distribute that exact docker-save archive to every run host
+
+assets:
+  agent_tools:
+    kind: binary_context
+    files:
+      rg:
+        source: https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz
+        version: 14.1.1
+        archive_sha256: 4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e
+        archive_member: ripgrep-14.1.1-x86_64-unknown-linux-musl/rg
+        sha256: f401154e2393f9002ac77e419f9ee5521c18f4f8cd3e32293972f493ba06fce7
+    note: >-
+      Official release asset. The extracted binary is supplied through the agent_tools
+      build context and checked during image build.
+
+  verl_source:
+    kind: git_repository
+    source: https://github.com/volcengine/verl.git
+    revision: 7aed6b230776f963fa09509c10d9c3a767d1102c
+    submodule: environment/verl
+    license: Apache-2.0
+    git_tree: 7379af39e186ee4eafeb7225f1120d1409b48ced
+    content_sha256: 9d91e58e8ee61713449c95056a5b573e463a811a64fc8ac2eae296123a5db0ad
+    hash_kind: tree_manifest_sha256
+    expected_files: 1015
+    size_bytes: 8356721
+    patch: environment/single_gpu_wall_clock.patch
+    download:
+      tool: git_archive
+      repository: https://github.com/volcengine/verl.git
+      revision: 7aed6b230776f963fa09509c10d9c3a767d1102c
+      exclude_git_metadata: true
+      nested_submodules: deliberately_absent
+    note: >-
+      The tree that actually executes. It carries trainer/distillation, which
+      OPD's own bundled verl does not -- which is why that submodule was dropped.
+      The unrelated `recipe` nested submodule is not part of this build context;
+      export the pinned superproject tree rather than recursively copying a clone.
+
+  justrl_source:
+    kind: git_repository
+    source: https://github.com/thunlp/JustRL.git
+    revision: cf444e9920b599c865ee6742c88dc162dcabcec2
+    license: not-declared-at-repository-root
+    license_review: train/LICENSE covers only the train subtree; review grader/data terms
+    content_sha256: a2b11b8976914727fe2f5262b00ada8fca662d2675d3c3fca5a862ec8c0e242d
+    hash_kind: tree_manifest_sha256
+    expected_files: 603
+    size_bytes: 6111748
+    download:
+      tool: git_archive
+      repository: https://github.com/thunlp/JustRL.git
+      revision: cf444e9920b599c865ee6742c88dc162dcabcec2
+      exclude_git_metadata: true
+    used_for:
+      - evals/utils.py -> the rule grader, baked into /opt/harness/justrl
+      - evals/grade.py -> CV_PROMPT for the CompassVerifier fallback
+      - data/MATH-500/test.parquet -> mounted as data/math500 for fast_eval
+    note: >-
+      Grader code is baked into the image rather than mounted. That is what makes
+      "the evaluator does not change" checkable by reading one Dockerfile.
+
+  models/student:
+    kind: model
+    source: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
+    revision: ad9f0ae0864d7fbcd1cd905e3c6c5b069cc8b562
+    license: MIT
+    content_sha256: d10e557e5097f5c1b5c2d70b4de0cee3eb96f170125cfcc68a922ab25083c7e5
+    hash_kind: tree_manifest_sha256
+    size_bytes: 3562046103
+    mount: /assets/models/student
+    phases: [explore, retrain]
+
+  models/teacher:
+    kind: model
+    source: hbx/JustRL-DeepSeek-1.5B
+    revision: 0637e4096c789c67f9eecbe8355e0bdeddede1c2
+    license: Apache-2.0
+    content_sha256: b45f3351510c8042bc1dfc1e621e15e0d6fbdc8d201bb663786f92db23d5cadd
+    hash_kind: tree_manifest_sha256
+    size_bytes: 3561656216
+    mount: /assets/models/teacher
+    phases: [explore, retrain]
+
+  models/verifier:
+    kind: model
+    source: opencompass/CompassVerifier-3B
+    # The immutable Hub revision is recorded alongside the content hash.
+    revision: 27d6d660bdf6c2b8a9f45906d4b76c508af65ab0
+    revision_last_modified: "2026-01-04T06:26:02Z"
+    license: Apache-2.0
+    license_source: https://huggingface.co/opencompass/CompassVerifier-3B
+    content_sha256: 849ae59811180d9f7e83c97d5b47c793df50aac718593e66b6b9722b88d4e543
+    hash_kind: tree_manifest_sha256
+    mount: /assets/models/verifier
+    phases: [score]
+    note: fallback judge for the rows the rule grader rejects
+
+  data/train.parquet:
+    kind: derived_dataset
+    source: BytedTsinghua-SIA/DAPO-Math-17k
+    source_revision: 65877096c24ffa7abc4e4fa5edb95cf3413a5674
+    source_file: data/dapo-math-17k.parquet
+    source_file_sha256: 534375d6bb8630d22ab46a56e11f2ffec1d288d8f7d04099bc82d68948705941
+    source_rows: 1791700
+    canonical_unique_rows: 16395
+    derivation_revision: opd-aime-zero-overlap-v2
+    materialization_revision: opd-aime-zero-overlap-v2-pyarrow23-public-source-v1
+    license: Apache-2.0
+    content_sha256: c597e3857f5754a338c007e420909da562eca61f5ceb0ecf8a1200f0e5dc6e19
+    hash_kind: file_sha256
+    expected_rows: 15285
+    size_bytes: 1663791
+    mount: /assets/data/train.parquet
+    phases: [explore, retrain]
+    derivation: >-
+      canonical deduplication of the complete 1,791,700-row public source to
+      16,395 unique prompts, then removal of canonical, containment and shared
+      eight-word overlap against the pinned AIME24/25 snapshots, followed by an
+      80-row deterministic holdout. Zero post-filter overlap with the final
+      questions; 15,285 training rows remain.
+    serialization:
+      format: parquet
+      pyarrow: "23.0.1"
+      compression: zstd
+      compression_level: 9
+    materialize:
+      sources:
+        dapo:
+          tool: huggingface_hub.snapshot_download
+          repo_type: dataset
+          repo_id: BytedTsinghua-SIA/DAPO-Math-17k
+          revision: 65877096c24ffa7abc4e4fa5edb95cf3413a5674
+        aime:
+          alias: data/aime
+      builder:
+        type: task_image
+        image: docker.io/chiyizhe/ai4ai@sha256:87c4dbbd1216502c6e18c893b77b37ea3b1d0becd7b08ee9d2514193a198a8f6
+        script: tools/asset_builders/build_opd_zero_overlap.py
+        script_sha256: 413be279142b64a7d0d7eeb00637d0e9cdf2696df354567bd2792bb5ad0cce82
+        command:
+          - python3
+          - /builder/repo/tools/asset_builders/build_opd_zero_overlap.py
+          - --dapo
+          - "{source:dapo}"
+          - --aime
+          - "{alias:data/aime}"
+          - --output
+          - "{output}"
+
+  data/math500:
+    kind: dataset
+    source: JustRL@cf444e9920b599c865ee6742c88dc162dcabcec2 data/MATH-500/test.parquet
+    expected_rows: 500
+    content_sha256: b009ef8dcb86ab687a104b8efb52080fd8ae14f32cc4a52447a3518461aa32c1
+    hash_kind: tree_manifest_sha256
+    file_count: 1
+    size_bytes: 73124
+    file_sha256: 966193d8d22e279e0055016566f0879b929748c29cba018b5db52981a8d88cfa
+    schema: prompt[0].content, reward_model.ground_truth
+    mount: /assets/data/math500
+    phases: [explore]
+    materialize:
+      sources:
+        math500:
+          tool: git_archive
+          repository: https://github.com/thunlp/JustRL.git
+          revision: cf444e9920b599c865ee6742c88dc162dcabcec2
+          member: data/MATH-500/test.parquet
+          destination: test.parquet
+    note: >-
+      fast_eval reads all 500 at 4 samples. Same tar as the grader, so
+      fast_eval and the final share one schema and one scoring path.
+
+  data/aime:
+    kind: dataset
+    sources:
+      - AI-MO/aimo-validation-aime@13f9e12f613e720c2a2b2f345dd04b998a29494d (Apache-2.0)
+      - opencompass/AIME2025@a6ad95f611d72cf628a80b58bd0432ef6638f958 (MIT)
+    expected_questions: 60
+    content_sha256: 676f918eee2b19c8fa1456d128ecd3b58fa052727d47f8c25c97eff7b256a648
+    hash_kind: tree_manifest_sha256
+    file_count: 7
+    size_bytes: 279382
+    file_sha256:
+      aime2024/data/train-00000-of-00001.parquet: 025484a99fea498e7d0c3b0ee42afcbec0176405c19c5dbf557b9f6ca6445675
+      aime2025/aime2025-I.jsonl: b91b3c96f05d9635d2a0692b124ebe023c1ff59cb19c074275e6c4b349d0659e
+      aime2025/aime2025-II.jsonl: 16a2dcfbbf9db1b11f8a69a3ba5e4cac73e3641b19a37e2307e9c12240bbed5e
+    mount: /assets/data/aime
+    phases: [score]
+    materialize:
+      sources:
+        aime24:
+          tool: huggingface_hub.snapshot_download
+          repo_type: dataset
+          repo_id: AI-MO/aimo-validation-aime
+          revision: 13f9e12f613e720c2a2b2f345dd04b998a29494d
+        aime25:
+          tool: huggingface_hub.snapshot_download
+          repo_type: dataset
+          repo_id: opencompass/AIME2025
+          revision: a6ad95f611d72cf628a80b58bd0432ef6638f958
+      combine:
+        aime24: aime2024
+        aime25: aime2025
+    note: >-
+      final_eval.py verifies these hashes at load. The data is mounted only for
+      score, so exploration cannot tune against the reported question set.

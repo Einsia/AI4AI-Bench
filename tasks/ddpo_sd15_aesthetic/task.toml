@@ -1,0 +1,58 @@
+schema_version = "1.5"
+name = "ddpo_sd15_aesthetic"
+
+[task]
+name = "ai4ai/ddpo-sd15-aesthetic"
+version = "1.1.0"
+description = "Improve Stable Diffusion v1.5 under a fixed aesthetic evaluator"
+
+[agent]
+timeout_sec = 14400
+
+[verifier]
+timeout_sec = 75600
+environment_mode = "separate"
+
+[x-ai4ai.formal]
+retrain_budget_sec = 43200
+artifact_limit = 3
+selection_rule = "best_valid_of_up_to_3"
+
+[environment]
+dockerfile = "environment/Dockerfile"
+image = "docker.io/chiyizhe/ai4ai@sha256:16fbe1972620c7e47a8fd2135fc3f0eb350c77d45ab30a648ea8416fedfbd5bb"
+digest = "layers:d56c497e70ee829f5dce60c38228e3495419e9568ca056b99f556318dd295aa6"
+config_digest = "config:47baf6d0d5cb0c98b2953254a3999859766fa4b5b32b975c5e10d61a2e5d3c46"
+source_sha256 = "e3ece0b56c0cc07b0d3abc677978d5af8dc4cd4d29f9130558782052e8ff705b"
+gpus = 1
+gpu_types = ["B300"]
+cpus = 8
+memory_mb = 65536
+storage_mb = 65536
+network_mode = "no-network"
+build_args = { SOURCE_DATE_EPOCH = "1767225600" }
+
+[x-ai4ai.container]
+shm_size = "8g"
+pids_limit = 4096
+
+[x-ai4ai.gpu]
+type = "B300"
+peak_memory_mib = 58598
+
+[assets]
+"models/stable-diffusion-v1-5" = "stable-diffusion-v1-5/stable-diffusion-v1-5@451f4fe16113bff5a5d2269ed5ad43b0592e9a14"
+"models/clip" = "openai/clip-vit-large-patch14@32bd64288804d66eefd0ccbe215aa642df71cc41"
+"data/final_reference.json" = "score-only generation seed/reference, sha256 c467aad251db3692d863d8fdfb7f3a7edccdc0af144e11c12f0856133ef04d24"
+
+[metadata]
+track = "v1"
+shipped_method = "ddpo_lora_ppo"
+shipped_method_source = "kvablack/ddpo-pytorch@1958463f020112c9a7bc85768d296daacc2e1b4b"
+base_model = "stable-diffusion-v1-5/stable-diffusion-v1-5@451f4fe16113bff5a5d2269ed5ad43b0592e9a14"
+train_data = "self-generated images from pinned simple_animals prompts"
+fast_metric = "mean_aesthetic_score_public64"
+fast_direction = "max"
+final_metric = "mean_aesthetic_score_final256"
+final_direction = "max"
+final_gate = "loadable LoRA or diffusers-pipeline artifact; headline metric is mean aesthetic score; alignment and diversity are auxiliary metrics"

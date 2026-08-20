@@ -1,0 +1,54 @@
+diff --git a/ddpo_pytorch/aesthetic_scorer.py b/ddpo_pytorch/aesthetic_scorer.py
+index cb64b61..33ee8a9 100644
+--- a/ddpo_pytorch/aesthetic_scorer.py
++++ b/ddpo_pytorch/aesthetic_scorer.py
+@@ -1,5 +1,6 @@
+ # Based on https://github.com/christophschuhmann/improved-aesthetic-predictor/blob/fe88a163f4661b4ddabba0751ff645e2e620746e/simple_inference.py
+ 
++import os
+ from importlib import resources
+ import torch
+ import torch.nn as nn
+@@ -32,8 +33,14 @@ class MLP(nn.Module):
+ class AestheticScorer(torch.nn.Module):
+     def __init__(self, dtype):
+         super().__init__()
+-        self.clip = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
+-        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
++        self.clip = CLIPModel.from_pretrained(
++            os.environ.get("DDPO_CLIP_PATH", "/assets/models/clip"),
++            local_files_only=True,
++        )
++        self.processor = CLIPProcessor.from_pretrained(
++            os.environ.get("DDPO_CLIP_PATH", "/assets/models/clip"),
++            local_files_only=True,
++        )
+         self.mlp = MLP()
+         state_dict = torch.load(
+             ASSETS_PATH.joinpath("sac+logos+ava1-l14-linearMSE.pth")
+diff --git a/ddpo_pytorch/diffusers_patch/ddim_with_logprob.py b/ddpo_pytorch/diffusers_patch/ddim_with_logprob.py
+index 7c1e824..98219a7 100644
+--- a/ddpo_pytorch/diffusers_patch/ddim_with_logprob.py
++++ b/ddpo_pytorch/diffusers_patch/ddim_with_logprob.py
+@@ -10,7 +10,7 @@ from typing import Optional, Tuple, Union
+ import math
+ import torch
+ 
+-from diffusers.utils import randn_tensor
++from diffusers.utils.torch_utils import randn_tensor
+ from diffusers.schedulers.scheduling_ddim import DDIMSchedulerOutput, DDIMScheduler
+ 
+ 
+diff --git a/tools/train.py b/tools/train.py
+index 2c876b1..45ec87d 100644
+--- a/tools/train.py
++++ b/tools/train.py
+@@ -592,7 +592,7 @@ def main(_):
+             # make sure we did an optimization step at the end of the inner epoch
+             assert accelerator.sync_gradients
+ 
+-        if epoch != 0 and epoch % config.save_freq == 0 and accelerator.is_main_process:
++        if epoch % config.save_freq == 0 and accelerator.is_main_process:
+             accelerator.save_state()
+ 
+ 

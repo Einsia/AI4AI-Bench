@@ -1,0 +1,25 @@
+# The exact pins from the reference protocol's Dockerfile, which built and ran.
+#
+# OWL commit dddb7a4 uses the 2023 Hugging Face API surface -- transformers 4.28.1
+# with a torch 2.8.0 base is deliberate and load-bearing, not neglect. Upgrading
+# transformers changes OPT's module names and breaks lib/prune_all.py's find_layers.
+#
+# datasets is needed by solution/owl_opt.py, which reads the gzipped C4 shard through
+# load_dataset("json", ...). It is NOT needed by harness/ -- the evaluator reads its
+# parquet with pandas, so the scoring path does not depend on it.
+numpy==1.24.4
+pandas==1.5.3
+pyarrow==12.0.1
+fsspec==2023.3.0
+dill==0.3.6
+multiprocess==0.70.14
+huggingface-hub==0.14.1
+transformers==4.28.1
+datasets==2.11.0
+sentencepiece==0.1.99
+protobuf==3.20.3
+scipy==1.10.1
+setuptools==75.8.0
+# --no-deps on the reference protocol, because accelerate 0.18.0 pins an older torch than the
+# base image ships.
+accelerate==0.18.0

@@ -1,0 +1,126 @@
+{
+  "algorithm": "sha256-canonical-file-map-v1",
+  "orchestrator_files": {
+    "orchestrator/agent.py": "9e058a0695e050ad69a905e23bbfc8e317afd99e814fdeb54d0d8567521dbf22",
+    "orchestrator/artifact.py": "8d5950bc4738cd1194d73c13898b61797605e441ce5d00eaaae169a83cee82e5",
+    "orchestrator/asset_identity.py": "a2697d0980664f9c69e26dc61efec704fabfc080d5bb8dbaff79021ba4aa45a0",
+    "orchestrator/container.py": "9c42c9e52d0b890f5b66d0629f4f1703e82dd25957df4dda4374485687c0b01c",
+    "orchestrator/container_harness/no_candidate.sh": "2af438b7ecfa5d95ab8b7dee94877ce6573edd218de9f0fbbb67531672d678b8",
+    "orchestrator/container_harness/publish_artifacts.py": "397e5510ee059231e3333cac3b0b9a015ec11fa18a578e6e8521674c985c97c6",
+    "orchestrator/container_harness/run_and_publish.py": "aec63751147857923e3c7c64ec7cae0d5256255108f13ac6002aa7888abafa06",
+    "orchestrator/container_harness/save_checkpoint.py": "febd0e8dd7bfe49a684af696306b0ddf6c58206ba6461e87f48e41a6411e4ce5",
+    "orchestrator/container_harness/submit.sh": "86ac0606d5d2cc9b3f40792df7d1db9e4990de7b83bc3e51829ea64a7d47d930",
+    "orchestrator/container_harness/validate_checkpoint.py": "b70c8ff755ac1876e316b185e221d12bdb212ab6c71c960494d08a772636a5fe",
+    "orchestrator/container_harness/workspace_fingerprint.py": "628f07838212ea7652d53a70fd7a2beedb4e9a30dd0961ec1b2f0e5596e54609",
+    "orchestrator/deferred_agent_finish.sh": "ae002bdc408554f0ea1aa5421789958f8af975ef4c8415fea796ff62bf49b30d",
+    "orchestrator/egress.py": "008c4fb415d9d70d3cda822ec48c43e8b7c3db2ef3762dc0f33fbe8e8e187273",
+    "orchestrator/evaluate.sh": "fa7d497ee875c371da69946bafa6b50b16c02ad5f1b72be8a76b91a0fc048e86",
+    "orchestrator/evaluation_config.py": "355777072ef33e1de39e3a4985a0340d9212c0a28c891e8a4350711cf704c3e7",
+    "orchestrator/external_patch.py": "63edb19d00fe893f2f0727b03c8a55010cda264632ffbcfb073bd0f2e4ab08ea",
+    "orchestrator/final_score.py": "87ba017f8b5b70af38c908a000945dd459f2d5a61fcb77f83958ed4f099e8792",
+    "orchestrator/host_contract.py": "a07071bab26d1485e8aed7f54ec5bd9622dc1877972cf7e3ef33b8f8d9600cd8",
+    "orchestrator/lifecycle.py": "8bcaa4941e2e4efa2a8023097b84e2bffd0fced38f6427ec319aafb176bfe886",
+    "orchestrator/manifest.py": "d0c3ce05ddd1ebed09c66a2472dafd209fdec33c35c85a8d408a5e44fb992f61",
+    "orchestrator/phase_identity.py": "16e1219d37f320dcbb56fc714763d8efa19151f0a46edc95ef169737c8c0ae95",
+    "orchestrator/phase_loader.py": "3cc51e3499d3f4986d0b131b13d20c168c87913407a47ecc954a444d534834cc",
+    "orchestrator/run_config.py": "60d9ba183308842ddca00eedcb549a62d6be7bd6b3b063ac6bfae436f66f1d93",
+    "orchestrator/runner.py": "f896dd806a381653b625aff225cbe47b4e30d6c25071af8b1ed3d1176969793a",
+    "orchestrator/score_when_done.sh": "71d7a078290fe064cc652f25f77ee1b562097a03571135e1c5186a01644a3949",
+    "orchestrator/task.py": "4319c7b3a3bbc2761dbb67e1d979be8d47bb6b005f582726a1e2286ab80f50a8",
+    "orchestrator/token_usage.py": "f8d329da1d26c80e9de216e95a47ab489e278cdf3a0cf8c3738ada2054440ba5",
+    "orchestrator/trial.sh": "85544f3941bbd730d16a8660368608f64f75180bbd27f82fa7272f83939b5f76"
+  },
+  "schema_version": 1,
+  "tasks": {
+    "ddpo_sd15_aesthetic": {
+      "digest": "595880a0cb7ed66b71b7ae542641de85c77e4ac650cc7ae20625dabf3d3a526e",
+      "task_files": {
+        "task/declaration.py": "c6c558edb5a5ac2a630391a5c1090d510d598916eed499a9ee76c07f1d305953",
+        "task/environment/assets.lock.yaml": "4546b4972b8049171d2017f54142070ec47ee59ae4bdc52dac66c6e87a910d48",
+        "task/instruction.md": "1f4b24bf668a31b7bcb9582b2e9031b7566a6e0a0f3b1c05a39dca0c75561281",
+        "task/task.toml": "a2baff700173569f7709a9a98f1bff1fa672d49db5f3900f0634f9531b342610"
+      }
+    },
+    "digress_qm9_graph_diffusion": {
+      "digest": "156ec8ea3adda1f9e749672aaa35612967915da439e6f05ed9f2acff5d4a918d",
+      "task_files": {
+        "task/declaration.py": "c608069741ec388cd1902fc023d84c3f199020801020b8037ffa016aac03f0f6",
+        "task/environment/assets.lock.yaml": "cc733c2634434e8d968b82482a1c4d190304801437995c1d9ededa2c8325b3c7",
+        "task/instruction.md": "beca9282da2afa1ef2988fcd799384950ab6013f19231c8e8ed82ea3b4e794fe",
+        "task/task.toml": "f113c9f22e4f74575f6c3f2a8fbf25a162a8f21559256b2bb2f806fbcecd3cc9"
+      }
+    },
+    "dpo_preference_alignment": {
+      "digest": "784060aabafca4cdfe24e34c1dbc0805f55e8edfe0e823622c15521124c79ee6",
+      "task_files": {
+        "task/declaration.py": "b74c05a02f21ec8081e3d709247238e1720ed2aa62adf7f1f9cb6a2c1264b73b",
+        "task/environment/assets.lock.yaml": "4598ab40c08805c603a1ac29f2a87373df042746ae1d96e69eee933405f1344e",
+        "task/instruction.md": "b0e3ba680f2111633ad1a20ed4f2a0b8b520aa6f22fd115b7cd82d2eaa612e90",
+        "task/task.toml": "e4fad2b877863b7f85bfaf61852ad1224bd81c851b545c65385cb1d428fc9833"
+      }
+    },
+    "model_soup_clip_imagenetv2": {
+      "digest": "2ff5926f3d07f1a4d2611de55f9678c214235b0f9143be138435c8480308f5e9",
+      "task_files": {
+        "task/declaration.py": "71f13cf83c701621fa981c565ff8c379a5a3296abd1daad32bf8ca2dab9fa80d",
+        "task/environment/assets.lock.yaml": "1cf86121699132acaf1ff0a0749d42955de36d877e71def66107083f15b20b9c",
+        "task/instruction.md": "822e5ee174f908056196d05f6b3ab5172834140f14ae0972ca5d1b15fd547906",
+        "task/task.toml": "52d0fde50a526a9153c63fcd31d8e5dcef5069a2d7b85550a19f28d9ecd4f8d4"
+      }
+    },
+    "opd_math_1p5b": {
+      "digest": "f12641ea9363b9ed71433cbe0325ee3436fdecb9a4f9808007a38a078db58e69",
+      "task_files": {
+        "task/declaration.py": "ba6ad77e8fbfc0e9321b678b2752d5d16fa794cc4aa65f304b4457bbda580325",
+        "task/environment/assets.lock.yaml": "b1b2e669762014fd12756c359a0e4f37761f23e35459619f9394c7a4c3146f72",
+        "task/instruction.md": "49f15a5f04eccf6b2c9895c5b3b453c06ac2d1eff0ec4f62df5699f9b7a3d5e1",
+        "task/task.toml": "bd28613ee14f754795da8e3a50bd6bb3864c128427ce8763dd860ceeeceb5826"
+      }
+    },
+    "openr1_code_livecodebench": {
+      "digest": "677fcd84f075aed47f2d7a209ba034ae534df498a0b4f2a2109608d135655cb4",
+      "task_files": {
+        "task/declaration.py": "999b2e4939f1af36196919538090b18ed6b9169e0fd604cbe929d7e77df71ec3",
+        "task/environment/assets.lock.yaml": "9b139e1dd0150c80c8284be9649f22ac94b2aacd3f8c7a0e4f458a1d5d679e58",
+        "task/instruction.md": "a0e535ee6d7372e26103d21b777cf25e501bd550cc31acd18a3e7e95dad88f24",
+        "task/task.toml": "7c4fe1a0e8e4c67e190c68813d2ec3e980950f556e2f6af669da4c4e5ae0c4df"
+      }
+    },
+    "openunlearning_tofu_npo_llama3p2_1b": {
+      "digest": "67ee9a7d81fa0898fa50db883956ae50f84cce698f4c9071f376a864dc467ef1",
+      "task_files": {
+        "task/declaration.py": "735391c84b3e1ac2411114ca46cac25f400107f6894cd7a19f63a1d9aef55e2e",
+        "task/environment/assets.lock.yaml": "2d3967076f2cbd4c921a0a4e290cb615a47c1dabd14b3e42094f6478259a5b80",
+        "task/instruction.md": "b0796c9df23c727c5dd5b8a091543fd9057fbe8dbfcbfa0164e70ea0c51cab8b",
+        "task/task.toml": "8ea3755b2a8c8da1e44f9c4671a401e80daf1e9bf3353dd2836e76518b0adb69"
+      }
+    },
+    "owl_wanda_opt6p7b_70pct": {
+      "digest": "f1f48eaa09f1cdcad0c2f2247af836465fda09d6d308cdea659c014b85c90c32",
+      "task_files": {
+        "task/declaration.py": "ad967b63c195ff0e8f1ffe269399f1542d4a32fa697489d6d52c80bc5f0df850",
+        "task/environment/assets.lock.yaml": "28cb1996c0d244e32f0f91cb6239117fd10a3120a0ae3bdcf1b1e6411e7e63e1",
+        "task/instruction.md": "4dd665754b8496e8a54377f482019cdbd353ec88e58715b7d50c5bfb7c2d6717",
+        "task/task.toml": "4dffb45ea73eb823b9c3e32e7338ff96e4d84e7dafc34558f19c5e58f3e73e5f"
+      }
+    },
+    "ragen_sokoban_grpo": {
+      "digest": "4557f9828da9421ca13123b3eaf76b69fdf22d02a5eafba03e1f92b16937ce81",
+      "task_files": {
+        "task/declaration.py": "8c7ccecc39268a880d6d0ad0c98a3f8d265c51bf79f207847976a76d404c42f4",
+        "task/environment/assets.lock.yaml": "66e8955a46eb75e75f8f7af7365fc8c0dbf055d4114f71904e98f80070d720f6",
+        "task/instruction.md": "e775d4b38e445f8e5b80bffe439fc35b37fcece2f0b45771a14d38b90ce9386d",
+        "task/task.toml": "06187e0bbc37f510efd3ee7aaecf2ffc3626e5cab28e53a9bcc3a3d585d946e0"
+      }
+    },
+    "ultrafeedback_bt_rm_rewardbench": {
+      "digest": "3f89627639769b7708c4579a8399542c3d532ca950de0cb19df5d6c4a133654c",
+      "task_files": {
+        "task/declaration.py": "7eefa402d3173a097cf6e0120386824ae93f7145d8d11814d583cdac9a3bd5df",
+        "task/environment/assets.lock.yaml": "2e4dc23c406d701c21f0dfbd6736f5d05fc050a9b12aaa823f52039857a9d986",
+        "task/instruction.md": "7d840831d73ea6e5142ada678a959ee6476dcf69ee9df4e86c52626c2ad1598c",
+        "task/task.toml": "37b58cb8221b448e1423cfa6d2f3f39652284dfbaa8e0ebc66572513360a424e"
+      }
+    }
+  }
+}

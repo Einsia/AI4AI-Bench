@@ -1,0 +1,91 @@
+schema_version: 1
+task: openunlearning_tofu_npo_llama3p2_1b
+build_contexts:
+  network: none
+  names: [open_unlearning_source, git_deb, wheelhouse]
+  reproducibility: all contexts are staged and verified before a network-disabled build
+source:
+  dataset: locuslab/TOFU
+  revision: 324592d84ae4f482ac7249b9285c2ecdb53e3a68
+  license: MIT
+  repository: https://github.com/locuslab/open-unlearning.git
+  repository_revision: 4ad738aaf60f6a4385f6e2506d01da99e76c31f3
+  repository_license: BSD-3-Clause
+  content_sha256: 957a22a7fbf3fe45d442382c27d1d870f0afcd0d92769ddc5082c5db152ae545
+  hash_kind: tree_manifest_sha256
+  file_count: 214
+  size_bytes: 489850
+  download:
+    tool: git_archive
+    repository: https://github.com/locuslab/open-unlearning.git
+    revision: 4ad738aaf60f6a4385f6e2506d01da99e76c31f3
+    exclude_git_metadata: true
+models:
+  training_start:
+    source: open-unlearning/tofu_Llama-3.2-1B-Instruct_full
+    revision: 88e31200b97e4c0c04ae0d2f0b591f427046d192
+    license: Llama-3.2-Community-License
+    license_source: https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct/blob/main/LICENSE.txt
+    upstream_code_license: BSD-3-Clause
+    model_safetensors_sha256: 35b0cd9f7db2735538ff78b4879fab61b23b7ca316df27b059585bf656700a8d
+    content_sha256: 253c4f4ea671c615135f65e49a5d73d49a2845fdc4d35ef1746410189477130c
+    hash_kind: tree_manifest_sha256
+    file_count: 8
+    size_bytes: 2488913124
+    download:
+      tool: huggingface_hub.snapshot_download
+      repo_id: open-unlearning/tofu_Llama-3.2-1B-Instruct_full
+      revision: 88e31200b97e4c0c04ae0d2f0b591f427046d192
+      allow_patterns: [.gitattributes, README.md, config.json, generation_config.json, model.safetensors, special_tokens_map.json, tokenizer.json, tokenizer_config.json]
+    excluded_staging_residue: [llmab_anchor_metadata.json, trainer_state.json, training_args.bin]
+    phases: [explore, retrain, score]
+  retain_reference:
+    source: open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90
+    revision: 7114300c0049527a71833f5683965c358ad9dcbf
+    license: Llama-3.2-Community-License
+    license_source: https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct/blob/main/LICENSE.txt
+    redistribution: follow_model_license_and_review_derived_checkpoint_terms_before_mirroring
+    model_safetensors_sha256: 3788e1724ce5563d5bb4cc4e82a985adc85d3c561f05427a63581e7b407c675c
+    content_sha256: af9e047c67a6feba0cd082111f3167a9c0a24ac934304720517e23f01676d46c
+    hash_kind: tree_manifest_sha256
+    file_count: 7
+    size_bytes: 2488913091
+    download:
+      tool: huggingface_hub.snapshot_download
+      repo_id: open-unlearning/tofu_Llama-3.2-1B-Instruct_retain90
+      revision: 7114300c0049527a71833f5683965c358ad9dcbf
+      allow_patterns: [.gitattributes, config.json, generation_config.json, model.safetensors, special_tokens_map.json, tokenizer.json, tokenizer_config.json]
+    excluded_staging_residue: [llmab_anchor_metadata.json, trainer_state.json, training_args.bin]
+    phases: [score]
+data:
+  train:
+    phases: [explore, retrain]
+    content_sha256: 405f544a4c5556ce35127ee9feb6f73feffa6415b793e8bb5b887395889d83b5
+    hash_kind: tree_manifest_sha256
+    file_count: 2
+    size_bytes: 1077843
+    materialize:
+      source: locuslab/TOFU@324592d84ae4f482ac7249b9285c2ecdb53e3a68
+      copy_only: [forget10.json, retain90.json]
+    files:
+      forget10.json: 0044c8c2e70a38be93f62ec6cb1c1cc2a1f55a8df2fb549a4da2da8dde9d92f6
+      retain90.json: debcf019c41db7b30b62ca6ad41fd8a4bcd29a5b321c21d2961974e308dfca55
+  final:
+    phases: [score]
+    content_sha256: bca0c15a7ca6660728370779332cd9b12b86f6f467f0ffac0f6a830097af5fc9
+    hash_kind: tree_manifest_sha256
+    file_count: 9
+    size_bytes: 2604798
+    materialize:
+      source: locuslab/TOFU@324592d84ae4f482ac7249b9285c2ecdb53e3a68
+      copy_only: [forget10.json, forget10_perturbed.json, retain90.json, retain_perturbed.json, holdout10.json, real_authors.json, real_authors_perturbed.json, world_facts.json, world_facts_perturbed.json]
+    files:
+      forget10.json: 0044c8c2e70a38be93f62ec6cb1c1cc2a1f55a8df2fb549a4da2da8dde9d92f6
+      forget10_perturbed.json: 6fbcb946c57ea1d7b2124cea0e61bf3b5409d1bc10d02368f090109450ed73c7
+      retain90.json: debcf019c41db7b30b62ca6ad41fd8a4bcd29a5b321c21d2961974e308dfca55
+      retain_perturbed.json: fc69f33bad70d3dca65920bdb54380039e3e8872dd16bbae20c1a839b99533fb
+      holdout10.json: efec32c7a7f66bfefaa90b8a4cc583296b0bbf882495db61076dec2d6edf44dd
+      real_authors.json: 5ed86f884ecbefc3a5db0b9dfe84ab3db710690c74d9402c0acc14bc3dd5a4b7
+      real_authors_perturbed.json: a23255383ac75a5fbe5acd57622a03fb9c368954fd7b2428afa152b784d9533a
+      world_facts.json: 5547b07340f46755b868a525941341c3d93814b5370ae7fa10143f653a3c7033
+      world_facts_perturbed.json: 0e171838040d0ec94b1ce248d891508e85e3b77344370077caa27b61898eb3e1

@@ -1,0 +1,54 @@
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+#
+# OpenR1 / LiveCodeBench scoring image (vLLM generation backend).
+#
+# Why this is a second image rather than a change to the first: the training
+# image pins trl==0.9.6, which requires transformers==4.46.1, and vLLM 0.11.0
+# requires transformers>=4.55.2. The two cannot coexist, and the scoring path
+# imports neither trl nor peft. Upstream huggingface/open-r1 splits the same
+# way -- training on trl, evaluation on lighteval + vLLM -- so this follows
+# upstream rather than departing from it.
+#
+# NumPy is not the conflict. vLLM 0.11.0 runs on numpy 1.26.4, which is what the
+# sibling RAGEN image already ships.
+#
+# What is preserved: this builds FROM the training image, so the read-only
+# /opt/harness -- the evaluators and the pinned LiveCodeBench tree -- is carried
+# over byte for byte, and the final RUN asserts that its commit has not moved.
+# The protocol is unchanged: same rows, same prompt, same extract_code, same
+# official test execution, same "every test case > 0" pass rule.
+#
+# What changes: only how tokens are produced. The shipped grade.generate() runs
+# one prompt per forward pass, which leaves a 275 GB card at about 1.4 percent
+# utilisation; the official protocol (n=10, temperature 0.2, top_p 0.95) did not
+# finish 175 problems in six hours that way. Continuous batching does the same
+# work in roughly two minutes.
+#
+# The added packages were resolved with `pip install --dry-run --report` inside
+# the training image, which asks what must be ADDED to that base rather than
+# resolving in a vacuum. torch is correctly absent from the resulting set.
+#
+# Build (no network, one named context):
+#   docker buildx build --network=none \
+#     --build-context wheelhouse=<wheelhouse directory> \
+#     -f tasks/openr1_code_livecodebench/environment/Dockerfile.eval \
+#     -t ai4ai/openr1_code_livecodebench-eval:v1.6-full175-vllm .
+FROM docker.io/chiyizhe/ai4ai@sha256:f15cd8f7d74d006dd8e4b5abb545406f29cca08c436225b8696e8dd13fd87005
+
+USER root
+# trl is the only thing holding transformers at 4.46; the scoring path imports
+# neither it nor peft. Both are present in the base by construction, so a failure
+# here is a real one and is not swallowed.
+RUN pip uninstall -y trl peft
+
+RUN --mount=type=bind,from=wheelhouse,target=/wh,readonly \
+    pip install --no-index --find-links=/wh --only-binary=:all: /wh/*.whl \
+ && pip check
+
+# Fail the build if the evaluator cannot be imported, if vLLM is missing, or if
+# the pinned LiveCodeBench commit ever moves.
+RUN python3 -c "import sys; sys.path.insert(0,'/opt/harness'); \
+import grade, vllm, transformers, numpy; \
+print('lcb_commit', grade.LCB_COMMIT); \
+print('vllm', vllm.__version__, '| transformers', transformers.__version__, '| numpy', numpy.__version__); \
+assert grade.LCB_COMMIT == '28fef95ea8c9f7a547c8329f2cd3d32b92c1fa24', 'LiveCodeBench commit moved'"

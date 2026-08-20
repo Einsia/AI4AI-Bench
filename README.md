@@ -1,0 +1,142 @@
+# AI4AI-Bench
+
+[Paper (coming soon)](https://example.com/ai4ai-bench/paper) ·
+[arXiv (coming soon)](https://example.com/ai4ai-bench/arxiv) ·
+[Website (coming soon)](https://example.com/ai4ai-bench/website) ·
+[Results / Trajectories (coming soon)](https://example.com/ai4ai-bench/results)
+
+AI4AI-Bench asks whether a coding agent can improve an existing AI training recipe—not
+merely edit code that passes a fixed test. Its ten tasks span generation, alignment,
+reasoning, unlearning, pruning, reinforcement learning, reward modeling, and model merging.
+
+Each run separates open-ended experimentation from reproducible measurement. The agent may
+explore for up to four hours, but only a source patch crosses into a fresh formal environment;
+formal training then runs for up to twelve hours, publishes at most three checkpoints, and
+hands each checkpoint to frozen validation and final evaluation.
+
+```text
+fixed task + assets
+        │
+        ├─ 4 h Explore ──> candidate.patch
+        │                         │
+        └──────── fresh Formal <──┘
+                  (up to 12 h)
+                         │
+             up to 3 checkpoints
+                         │
+             validation ──> final score
+```
+
+## Quickstart
+
+AI4AI-Bench targets Linux `amd64`, Python 3.10+, Docker with NVIDIA Container Toolkit, and
+an NVIDIA GPU. Official runs use one B300; other GPUs are useful for local development when
+the selected task fits. Install a native Codex or Claude CLI before starting an agent run.
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e '.[assets]'
+```
+
+Prepare one task's pinned public assets. Set `HF_TOKEN` first if an upstream repository is
+gated.
+
+```bash
+export AI4AI_ASSET_STORE=/data/ai4ai/assets
+python tools/prepare_assets.py \
+  --task ddpo_sd15_aesthetic \
+  --assets "$AI4AI_ASSET_STORE/ddpo_sd15_aesthetic" \
+  --execute
+python tools/verify_assets.py \
+  --task ddpo_sd15_aesthetic \
+  --assets "$AI4AI_ASSET_STORE/ddpo_sd15_aesthetic" \
+  --hash
+```
+
+Run the no-API GPU smoke test first. It pulls one published image if needed and exercises
+Docker, GPU passthrough, a CUDA kernel, host mounts, and the mock score lifecycle.
+
+```bash
+bash tools/smoke.sh --root /data/ai4ai/smoke --gpu 0
+```
+
+Then configure the selected Agent and check the complete host without displaying credentials.
+
+```bash
+export OPENAI_API_KEY=your-key
+python tools/check_setup.py \
+  --task ddpo_sd15_aesthetic \
+  --assets "$AI4AI_ASSET_STORE/ddpo_sd15_aesthetic" \
+  --root /data/ai4ai/runs \
+  --gpu 0 --agent codex --mode local
+```
+
+Start a real run. The default lifecycle performs Explore, fresh formal retraining,
+checkpoint validation, and final evaluation.
+
+```bash
+bash orchestrator/trial.sh ddpo-codex \
+  --task tasks/ddpo_sd15_aesthetic \
+  --assets "$AI4AI_ASSET_STORE/ddpo_sd15_aesthetic" \
+  --root /data/ai4ai/runs --gpu 0 \
+  --agent codex --model gpt-5.6-sol --reasoning-effort high
+```
+
+For Claude, use `--agent claude --model claude-opus-5` and set `ANTHROPIC_API_KEY` (or
+`ANTHROPIC_AUTH_TOKEN`). See the [runtime guide](tools/docs/runtime-and-storage.md) for alternate
+paths, endpoints, local/official verification modes, and storage requirements.
+
+## Evaluation and replay
+
+Replay an existing source patch from the same fixed start:
+
+```bash
+bash orchestrator/trial.sh replay-name \
+  --task tasks/ddpo_sd15_aesthetic \
+  --assets /data/ai4ai/assets/ddpo_sd15_aesthetic \
+  --root /data/ai4ai/runs --gpu 0 \
+  --candidate-patch candidate.patch
+```
+
+Evaluate one to three existing checkpoints independently:
+
+```bash
+bash orchestrator/evaluate.sh eval-name \
+  --task tasks/ddpo_sd15_aesthetic \
+  --assets /data/ai4ai/assets/ddpo_sd15_aesthetic \
+  --root /data/ai4ai/evaluations --gpu 0 \
+  --checkpoint 1000=/path/to/checkpoint-1000
+```
+
+These are self-hosted final evaluations. The public `warn` defaults label their receipts as
+non-official local results; strict official-mode requirements are documented separately. See
+[evaluation and receipts](tools/docs/evaluation.md) for checkpoint selection, result states, and the
+current absence of a blind evaluation service.
+
+## Tasks and documentation
+
+- [Ten benchmark tasks](tasks/README.md)
+- [Runtime assets](tools/docs/assets.md)
+- [Runtime, storage, and mounts](tools/docs/runtime-and-storage.md)
+- [Evaluation and receipts](tools/docs/evaluation.md)
+- [Published task images](tools/docs/published-images.md)
+- [Troubleshooting](tools/docs/troubleshooting.md)
+
+## Citation
+
+The paper metadata is not public yet. Replace the marked fields after the arXiv release.
+
+```bibtex
+@article{ai4aibench2026,
+  title   = {AI4AI-Bench: Benchmarking LLM Agents in Algorithmic Design for Recursive Self-Improvement},
+  author  = {Yizhe Chi and Wenyi Li and Deyao Hong and Xiaoqiu Wang and Mingju Gao and Kaisen Yang and Bingxiang He and Youjie Zheng and Calvin Xiao and Qinhuai Na},
+  journal = {arXiv preprint arXiv:TODO},
+  year    = {2026}
+}
+```
+
+## License
+
+The benchmark code is released under [Apache-2.0](LICENSE). Models, datasets, and image
+contents remain subject to their upstream terms; see [third-party notices](THIRD_PARTY_NOTICES.md).

@@ -1,0 +1,54 @@
+schema_version = "1.5"
+name = "ragen_sokoban_grpo"
+
+[task]
+name = "ai4ai/ragen-sokoban-grpo"
+version = "1.1.0"
+description = "Improve a fixed 3B policy on multi-turn Sokoban"
+
+[agent]
+timeout_sec = 14400
+
+[verifier]
+timeout_sec = 59400
+environment_mode = "separate"
+
+[x-ai4ai.formal]
+retrain_budget_sec = 43200
+artifact_limit = 3
+selection_rule = "best_valid_of_up_to_3"
+
+[environment]
+dockerfile = "environment/Dockerfile"
+image = "docker.io/chiyizhe/ai4ai@sha256:bbdf9daec78a4e56cbdcb555bf918185fdee242d796b1cb400f95f5c152fedfc"
+digest = "layers:0f98d2b2065e90d0ebb031e35a880fa939bde7ab5017f2e964be688d629ece7d"
+config_digest = "config:fc22714e6fcc80d22aeebc95461c6585e9ec96e369cf6aee46e30d2613da1c36"
+source_sha256 = "7f8a1144374cba4ed5eb323da3c5dee3e1c5cc87c2511257e57a0d6ef3d8d6e5"
+gpus = 1
+gpu_types = ["B300"]
+cpus = 32
+memory_mb = 131072
+storage_mb = 524288
+network_mode = "no-network"
+
+[x-ai4ai.container]
+shm_size = "24g"
+pids_limit = 8192
+
+[x-ai4ai.gpu]
+type = "B300"
+peak_memory_mib = 247684
+
+[assets]
+"models/policy" = "Qwen/Qwen2.5-3B-Instruct@aa8e72537993ba99e69dfaafa59ed015b17504d1"
+
+[metadata]
+track = "v1"
+shipped_method = "multi_turn_sokoban_grpo"
+shipped_method_source = "mll-lab-nu/RAGEN@20daedc4 with verl@d62da495"
+base_model = "Qwen/Qwen2.5-3B-Instruct@aa8e7253"
+train_data = "on-policy generated Sokoban boards; no mounted board dataset"
+fast_metric = "public_four_bank_solve_rate"
+fast_direction = "max"
+final_metric = "held_out_512_board_solve_rate"
+final_direction = "max"

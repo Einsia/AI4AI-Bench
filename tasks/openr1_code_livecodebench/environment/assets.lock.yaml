@@ -1,0 +1,163 @@
+schema_version: 2
+task_id: openr1_code_livecodebench
+
+# Every path here is an alias. A deployment profile maps aliases onto real
+# directories, so the repository carries no host layout.
+path_policy: repo_relative_aliases
+
+build_contexts:
+  network: none
+  # lcb_source is baked into /opt/harness; wheelhouse carries hash-locked Python
+  # packages; git_deb and tini_deb supply tools absent from the offline base.
+  names: [lcb_source, wheelhouse, git_deb, tini_deb]
+  reproducibility: >-
+    The builder does not normalize layer timestamps, so the layers digest identifies
+    one attested build rather than claiming bit-for-bit rebuild reproducibility.
+
+assets:
+  lcb_source:
+    kind: git_checkout
+    source: https://github.com/LiveCodeBench/LiveCodeBench
+    revision: 28fef95ea8c9f7a547c8329f2cd3d32b92c1fa24
+    license: MIT
+    license_source: >-
+      https://github.com/LiveCodeBench/LiveCodeBench/blob/28fef95ea8c9f7a547c8329f2cd3d32b92c1fa24/LICENSE
+    content_sha256: 9a907a102f864d498303002b6ece1b7557543d8f02c861322a5ea0ec115d8fb1
+    hash_kind: tree_manifest_sha256
+    file_count: 56
+    size_bytes: 4780934
+    baked_into_image: /opt/harness/livecodebench
+    used_for:
+      - lcb_runner/benchmarks/code_generation.py -> CodeGenerationProblem
+      - lcb_runner/evaluation/compute_code_generation_metrics.py -> codegen_metrics
+      - lcb_runner/prompts/code_generation.py -> the prompt template
+      - lcb_runner/utils/extraction_utils.py -> extract_code
+      - lcb_runner/lm_styles.py -> the CodeQwenInstruct style
+    note: >-
+      Code, not data, so it is baked in rather than mounted. This keeps proxy and
+      final evaluation on the same attested implementation.
+
+  models/training_start:
+    kind: model
+    source: Qwen/Qwen2.5-Coder-1.5B-Instruct
+    revision: 2e1fd397ee46e1388853d2af2c993145b0f1098a
+    license: Apache-2.0
+    license_source: >-
+      https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct/blob/2e1fd397ee46e1388853d2af2c993145b0f1098a/LICENSE
+    content_sha256: 06582c9c8f4350322c98d825208bb623734370bf68fc118f5e09f573c1862629
+    hash_kind: tree_manifest_sha256
+    file_count: 10
+    size_bytes: 3098973788
+    mount: /assets/models/training_start
+    phases: [explore, retrain]
+    note: >-
+      The fixed training start is the Coder model; other Qwen variants are outside
+      this task contract.
+
+  data/codeforces_cots:
+    kind: dataset
+    source: open-r1/codeforces-cots
+    revision: 39ac85c150806230473c70ad72c31f6232fe3f41
+    subset: solutions_py_decontaminated
+    license: unresolved-upstream-metadata-conflict
+    license_source: >-
+      https://huggingface.co/datasets/open-r1/codeforces-cots/blob/39ac85c150806230473c70ad72c31f6232fe3f41/README.md
+    declared_license: CC-BY-4.0
+    dataset_card_text_license: ODC-By-4.0
+    license_review: >-
+      The pinned dataset card declares CC-BY-4.0 in metadata but says the
+      non-standard string "ODC-By 4.0" in its prose. These are not normalized into
+      an invented SPDX expression; redistribution requires publisher review.
+    content_sha256: b62faadb8d24abc866f5dbc810b55ed4c52a3f43020556336a3132d1be92369b
+    hash_kind: tree_manifest_sha256
+    file_count: 4
+    size_bytes: 500208491
+    expected_rows: 8133
+    mount: /assets/data/codeforces_cots
+    phases: [explore, retrain]
+    completeness: whole_subset
+    note: >-
+      The WHOLE solutions_py_decontaminated split, all four parquet shards, not a
+      row projection of it. run.sh's TRAIN_ROWS default draws 8005 rows plus 128
+      validation rows after a shuffle at split_seed 20260727 -- that is a budget,
+      and the rest of the split is present so raising it is a real option. The
+      actual available count is reported as corpus_rows_available in summary.json.
+
+  data/livecodebench_public:
+    kind: frozen_benchmark_export
+    source: livecodebench/code_generation_lite
+    revision: 503416f80ac447d31f252d8434023786ce45dd0c
+    release_slice: v4_v5
+    license: upstream-dataset-card-declares-unspecified-cc
+    license_source: >-
+      https://huggingface.co/datasets/livecodebench/code_generation_lite
+    license_review: do not inherit the MIT license of the evaluator code repository
+    content_sha256: 50bcfa8c5be9f21f15687fffcc5b929cb4510dcd0b68f0cf48dc702b26378238
+    hash_kind: tree_manifest_sha256
+    file_count: 3
+    size_bytes: 1762347372
+    files: [test4.jsonl, test5.jsonl, README.md]
+    download:
+      tool: huggingface_hub.snapshot_download
+      repo_type: dataset
+      repo_id: livecodebench/code_generation_lite
+      revision: 503416f80ac447d31f252d8434023786ce45dd0c
+      allow_patterns: [test4.jsonl, test5.jsonl, README.md]
+    mount: /assets/data/livecodebench_public
+    phases: [explore]
+    slices:
+      # Both are positions in one sha256(question_id) order over the union of the
+      # two files. Do not reorder or re-slice: every recorded score below is
+      # defined by these offsets.
+      proxy: rows 0..63, 64 rows, health check only
+      confirm: rows 64..267, 204 rows, disjoint from the proxy
+    row_count: >-
+      NOT RECORDED. The union holds at least 268 rows, which is what the
+      confirmation slice at offset 64 proves, but no file on the reference protocol
+      records the exact total. grade.py refuses a slice it cannot fill rather
+      than returning a short one.
+    note: >-
+      Mounted into exploration only. The 64-row proxy's recorded rank correlation
+      is 0.0 -- the training start and the maintainer baseline both score 0.046875
+      on it while separating 0.06373 vs 0.08824 on the 204-row slice. The
+      confirmation slice was a separate selection tier on the reference protocol
+      (public_confirmation); v1 has two tiers, so it survives as fast_eval.sh
+      --confirm rather than as a stage of its own.
+
+  data/livecodebench_final:
+    kind: frozen_benchmark_export
+    status: MATERIALIZED
+    source: livecodebench/code_generation_lite
+    revision: 503416f80ac447d31f252d8434023786ce45dd0c
+    release_slice: v6_only
+    license: upstream-dataset-card-declares-unspecified-cc
+    license_source: >-
+      https://huggingface.co/datasets/livecodebench/code_generation_lite
+    license_review: do not inherit the MIT license of the evaluator code repository
+    files: [test6.jsonl, README.md]
+    file_count: 2
+    size_bytes: 134306630
+    hash_kind: tree_manifest_sha256
+    mount: /assets/data/livecodebench_final
+    phases: [score]
+    scored_rows: >-
+      All 175 rows of test6.jsonl, taken in the sha256(question_id) order and pinned
+      as FINAL_ROWS in harness/final_eval.py rather than passed as an argument. The
+      whole v6-only release file is scored; earlier revisions fixed a 128-row prefix.
+    content_sha256: 99dc1fdd70ae43fbba53eb5bf81ea865acf16a067698c935397fd6d3d75ac59f
+    superseded_line_manifest_sha256: 32c176033ed0a62b9b4f51638ba84e5527a923729a8353e578913dbe123b2483
+    download:
+      tool: huggingface_hub.snapshot_download
+      repo_type: dataset
+      repo_id: livecodebench/code_generation_lite
+      revision: 503416f80ac447d31f252d8434023786ce45dd0c
+      allow_patterns: [test6.jsonl, README.md]
+    # The row file on its own, separately from the tree manifest above, because this
+    # is the hash harness/final_eval.py records in resolved_config.json for every
+    # scored run -- so a run's own output can be checked against this line.
+    test6_jsonl_sha256: bb4c364f71921c4495a6ad15abe1a927350b720009f4933e2e71f8af0f6fd1f5
+    test6_jsonl_size_bytes: 134303240
+    note: >-
+      The exact v6 bytes are public at the pinned Hub commit, but this alias is mounted
+      only during score. Public availability does not make it exploration-visible.
+      harness/final_eval.py refuses to fall back to exploration data.

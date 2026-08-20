@@ -1,0 +1,22 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.2
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: end-of-file-fixer
+        # A diff's blank context line is a single space. Stripping it makes the
+        # hunk body shorter than its header declares, and git apply then drops
+        # the tail of the hunk without reporting anything.
+        exclude: '\.patch$'
+      - id: trailing-whitespace
+        exclude: '\.patch$'
+

@@ -1,0 +1,159 @@
+schema_version: 2
+task_id: ragen_sokoban_grpo
+
+# Every path here is an alias. A deployment profile maps aliases onto real
+# directories, so the repository carries no host layout.
+path_policy: repo_relative_aliases
+
+build_contexts:
+  network: none
+  # RAGEN with its pinned verl submodule, the wheel directory, and git as .deb packages.
+  #
+  # The wheelhouse is no longer unused. It carried nothing while the base image was
+  # `llm-algobench-ragen:0.1.1`, which already held RAGEN's dependency set; that image is
+  # on no host and cannot be rebuilt from this repository, so the base is now
+  # pytorch/pytorch:2.8.0-cuda12.8-cudnn9-devel and the wheelhouse carries the 169 wheels
+  # that stack RAGEN and verl 0.6.1 on top of it. See environment/runtime-requirements.in.
+  #
+  # git_deb exists because that base has no git, which both submit.sh and the build's own
+  # `git apply` need, and the build has no network for apt.
+  # cuda_ptxas carries one binary: a PTX assembler that knows this card's target. It is
+  # a build context rather than an asset mount because it has to be present in every
+  # phase, including exploration, and orchestrator's Phase.with_command clears a
+  # phase's exports -- so the agent path would not have received it.
+  names: [ragen_source, wheelhouse, git_deb, cuda_ptxas]
+  reproducibility: >-
+    The layers digest identifies one built artifact. Every build verifies that the two
+    RAGEN trees are byte-identical and match the hashes pinned in harness/grade.py.
+  sdist_only_wheels:
+    # Two requirements PyPI publishes only as sdists, which --only-binary :all: rejects.
+    # environment/resolve_wheelhouse.sh builds both, once, with network, and stages them
+    # beside the wheelhouse; the build itself stays --network=none.
+    - gym==0.26.2
+    # Pinned as ==4.9.* by hydra-core (every 1.x) and by omegaconf 2.3.x, whose grammar
+    # parser is antlr-generated. Without it the resolver silently backtracks to
+    # hydra-core 0.11.3 and omegaconf 1.4.1 -- a 2019 pair that installs cleanly and then
+    # fails at RAGEN's first @hydra.main(version_base=None, ...).
+    - antlr4-python3-runtime==4.9.3
+
+assets:
+  ragen_source:
+    kind: git_repository_with_pinned_submodule
+    source: https://github.com/mll-lab-nu/RAGEN.git
+    revision: 20daedc47558e000f7de912b060646bf2e8026bd
+    license: MIT
+    license_source: https://github.com/mll-lab-nu/RAGEN/blob/20daedc47558e000f7de912b060646bf2e8026bd/LICENSE
+    content_sha256: 5c8a9a8a6e2380c0e9401a68c7ccda3c7f28ecdf73839824fd0a11c5120ab87d
+    hash_kind: tree_manifest_sha256
+    expected_files: 1299
+    size_bytes: 37717160
+    patch: environment/ragen_runtime_compat.patch
+    components:
+      verl_revision: d62da4950573d7a4b7ef2362337952e7ab59e78d
+      verl_path: verl
+      verl_license: Apache-2.0
+    download:
+      tool: git
+      checkout: 20daedc47558e000f7de912b060646bf2e8026bd
+      recurse_submodules: true
+      required_submodule_revision: d62da4950573d7a4b7ef2362337952e7ab59e78d
+      # `recurse_submodules: true` above is a requirement, not a description of what a
+      # plain clone gives you, and the difference is checkable: RAGEN@20daedc4 without
+      # submodules is 200 files, and expected_files below is 1299. The build context
+      # arrived without them once -- `git submodule status` showed all four unfetched --
+      # and the only symptom before check_image.py was a missing /workspace/ragen/verl.
+      #
+      # Only `verl` is needed. Fetching it alone brings the tree to exactly the 1299 files
+      # and 37717160 bytes pinned below, which is how this file's own numbers prove the
+      # other three are not part of the measured artifact:
+      #   external/webshop-minimal, external/kimina-lean-server -- their envs are behind
+      #   `try/except ImportError` in ragen/env/__init__.py, so they degrade to absent.
+      #   ragen/env/spatial/Base -- not imported anywhere in the tree.
+      submodules_required: [verl]
+      submodules_deliberately_absent:
+        - external/webshop-minimal
+        - external/kimina-lean-server
+        - ragen/env/spatial/Base
+    baked_into_image:
+      - /workspace/ragen  -> editable; training uses this, and it enters candidate.patch
+      - /opt/harness/ragen -> frozen; both evaluators use this, read-only
+    note: >-
+      This tree is the training framework AND the Sokoban environment AND the solve
+      reward, which is why it is in the image twice rather than mounted once. Baking
+      it is what makes "the environment does not change" a property of the image:
+      harness/final_eval.py hashes the frozen copy and checks that the rollout
+      resolved to it. On the reference protocol this arrived as a mounted asset, so the
+      guarantee depended on the deployment profile mounting the right directory.
+      There is no dataset entry anywhere in this file because there is no dataset:
+      boards are generated from a seed by the code in this tree.
+
+  cuda_ptxas:
+    kind: toolchain_binary
+    # NOT a fixed input to the measurement, and the only entry here that is not part of
+    # what is being measured. It is the PTX assembler, needed because the card is newer
+    # than the base image's CUDA: compute capability (10, 3) makes triton ask ptxas for
+    # sm_103a, and CUDA 12.8 -- what this base ships, twice -- stops at sm_100a. Every
+    # torch.compile in a run died on
+    # `ptxas fatal : Value 'sm_103a' is not defined for option 'gpu-name'`.
+    #
+    # 12.9 exactly, not "newer": sm_103 first exists in 12.9, triton 3.4.0's
+    # ptx_get_version raises for major 13, and the reported version is what triton
+    # writes into the PTX `.version` directive, which must be >= 8.8 for this target.
+    # environment/check_image.py asserts all three properties at build time.
+    version: "12.9.86"
+    content_sha256: 983b0e9283855979f42cebfd80d43f9b6e786eb84f03f7570bf941c4d3a3c461
+    hash_kind: file_sha256
+    size_bytes: 34931056
+    expected_files: 1
+    license: NVIDIA CUDA Toolkit EULA
+    license_source: https://docs.nvidia.com/cuda/eula/
+    baked_into_image:
+      - /opt/cuda-ptxas/ptxas -> read-only; TRITON_PTXAS_PATH points at it
+    source: nvidia-cuda-nvcc-cu12==12.9.86
+    download:
+      tool: pypi_wheel_member
+      url: https://files.pythonhosted.org/packages/25/48/b54a06168a2190572a312bfe4ce443687773eb61367ced31e064953dd2f7/nvidia_cuda_nvcc_cu12-12.9.86-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl
+      wheel_sha256: 5d6a0d32fdc7ea39917c20065614ae93add6f577d840233237ff08e9a38f58f0
+      member: nvidia/cuda_nvcc/bin/ptxas
+      destination: cuda_ptxas/ptxas
+      note: >-
+        Extract this one member without installing the wheel, preserve executable
+        mode, and verify content_sha256 above. The PyPI project metadata declares
+        LicenseRef-NVIDIA-Proprietary; redistribution remains subject to the CUDA
+        Toolkit EULA.
+
+  models/policy:
+    kind: model
+    source: Qwen/Qwen2.5-3B-Instruct
+    revision: aa8e72537993ba99e69dfaafa59ed015b17504d1
+    license: Apache-2.0
+    license_source: https://huggingface.co/Qwen/Qwen2.5-3B-Instruct/blob/aa8e72537993ba99e69dfaafa59ed015b17504d1/LICENSE
+    content_sha256: 734d26754e0bb9df8d3680b763c6465a13c83e5f8081374df673b1db695b72da
+    hash_kind: tree_manifest_sha256
+    expected_files: 12
+    size_bytes: 6183464935
+    # The alias stays `models/policy`; the container path spells out the architecture
+    # because RAGEN's train.py decides whether the response mask is supported by
+    # reading the model path as a string, and a role-named path made that sniff answer
+    # "not qwen". declaration.py:POLICY_MOUNT is the single source of this value and
+    # carries the whole explanation; this line has to agree with it.
+    mount: /assets/models/policy-qwen2.5-3b-instruct
+    phases: [explore, retrain]
+    note: >-
+      The training start. Not mounted into the score phase: the policy being scored
+      there is the checkpoint's own weights, so a model mount would be a second place
+      for weights to come from.
+
+# No `data:` section, and no final-only asset. Both are worth stating rather than
+# leaving as absences.
+#
+# The boards are generated. `seed.val=N` selects which 64 (or 640) Sokoban boards
+# exist, so this task's "de-contaminated source" is the generator plus the whole seed
+# space, and the container holds all of it -- there is no subset mount to worry
+# about, because a candidate can generate any board it likes.
+#
+# What that costs is the usual way of withholding a final. The proxy's four banks
+# (seeds 4242-4245) are deliberately in the image. The final's seed is not: it is an
+# argument the score phase supplies, declared in declaration.py, which never enters a
+# container. Withholding a seed is this task's equivalent of not mounting the
+# question set, and it is the only form available when the questions are computable.

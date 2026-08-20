@@ -1,0 +1,61 @@
+schema_version = "1.5"
+name = "openunlearning_tofu_npo_llama3p2_1b"
+
+[task]
+name = "ai4ai/openunlearning-tofu-npo-llama3p2-1b"
+version = "1.0.0"
+description = "Improve Llama-3.2-1B unlearning on fixed TOFU assets"
+
+[agent]
+timeout_sec = 14400
+
+[verifier]
+timeout_sec = 97200
+environment_mode = "separate"
+
+[x-ai4ai.formal]
+retrain_budget_sec = 43200
+artifact_limit = 3
+selection_rule = "best_valid_of_up_to_3"
+
+[environment]
+dockerfile = "environment/Dockerfile.evaluator-hotfix"
+image = "docker.io/chiyizhe/ai4ai@sha256:fe21d8982535c908ac81af20e4ba8c72bb0ff30c8d5ac0e5ebd2751ed00ff884"
+digest = "layers:33c4fad17d2f1ba88a838e72a13d30065eac4ce68af2ca6980ebc5ef13d25065"
+config_digest = "config:d0ffb56915b4f4237350e7177a395379ebe2cf1109449f28cfbd14c050704fc5"
+source_sha256 = "347a00db1addb268f6f8858d061e4455d83e5c51b837e67eda11833450de7daa"
+gpus = 1
+gpu_types = ["B300"]
+cpus = 8
+memory_mb = 65536
+storage_mb = 262144
+network_mode = "no-network"
+
+[x-ai4ai.container]
+shm_size = "64g"
+pids_limit = 4096
+
+[x-ai4ai.gpu]
+type = "B300"
+peak_memory_mib = 33242
+
+[assets]
+"models/training_start" = "published full anchor revision 88e31200b97e4c0c04ae0d2f0b591f427046d192"
+"models/retain_reference" = "published retain90 anchor revision 7114300c0049527a71833f5683965c358ad9dcbf, evaluator only"
+"data/train" = "TOFU revision 324592d8 train-role projection"
+"data/final" = "TOFU revision 324592d8 evaluator-role projection, score only"
+
+[metadata]
+track = "v1"
+shipped_method = "official_openunlearning_npo"
+shipped_method_source = "OpenUnlearning@4ad738aaf60f6a4385f6e2506d01da99e76c31f3"
+base_model = "meta-llama/Llama-3.2-1B-Instruct"
+training_start = "published full anchor@88e31200b97e4c0c04ae0d2f0b591f427046d192"
+retain_reference = "published retain90 anchor@7114300c0049527a71833f5683965c358ad9dcbf"
+train_data = "TOFU forget10/retain90@324592d84ae4f482ac7249b9285c2ecdb53e3a68"
+fast_metric = "fixed_forget_retain_answer_nll_diagnostic"
+fast_direction = "max"
+final_metric = "balanced_unlearning_score"
+final_direction = "max"
+balanced_status = "local benchmark composite; not an OpenUnlearning metric or validity gate"
+final_gate = "pinned OpenUnlearning component evaluation; local composite adds no validity gate"

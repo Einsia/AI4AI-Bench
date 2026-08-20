@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+
+# This deliberately small release image is an auditable evaluator-only hotfix.
+# The complete training/runtime environment remains the immutable public v1.5
+# image below; the only filesystem payload added here is the reviewed evaluator.
+FROM docker.io/chiyizhe/ai4ai@sha256:2e9d9c9f1528077c413bba83681973ac832a7b35aa84fa0d7d18a35e4fe504fc
+
+COPY tasks/openunlearning_tofu_npo_llama3p2_1b/harness/final_eval.py /opt/harness/final_eval.py
+
+RUN set -eu; \
+    test "$(sha256sum /opt/harness/final_eval.py | cut -d ' ' -f 1)" = \
+      "d3853205580ff496df82819a1c490e01473abf91fbc085d4c88f05ccd692f93f"; \
+    chmod 0555 /opt/harness/final_eval.py; \
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/opt/harness python3 -B -c \
+      'import final_eval; assert len(final_eval.FINAL_DATASET_BINDINGS) == 23; assert {name for _, name in final_eval.FINAL_DATASET_BINDINGS} <= set(final_eval.DATA_HASHES)'; \
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/opt/harness python3 -B \
+      /opt/harness/final_eval.py --mock \
+      --output /tmp/ai4ai-evaluator-hotfix-self-check \
+      --reward-path /tmp/ai4ai-evaluator-hotfix-self-check/reward \
+      >/tmp/ai4ai-evaluator-hotfix-self-check.stdout; \
+    test -s /tmp/ai4ai-evaluator-hotfix-self-check/summary.json; \
+    test -s /tmp/ai4ai-evaluator-hotfix-self-check/reward; \
+    rm -rf /tmp/ai4ai-evaluator-hotfix-self-check \
+      /tmp/ai4ai-evaluator-hotfix-self-check.stdout; \
+    test ! -e /tmp/ai4ai-evaluator-hotfix-self-check; \
+    test ! -e /tmp/ai4ai-evaluator-hotfix-self-check.stdout
+
+LABEL org.ai4ai.hotfix.kind="openunlearning-final-evaluator" \
+      org.ai4ai.hotfix.base.digest="sha256:2e9d9c9f1528077c413bba83681973ac832a7b35aa84fa0d7d18a35e4fe504fc" \
+      org.ai4ai.hotfix.evaluator.sha256="d3853205580ff496df82819a1c490e01473abf91fbc085d4c88f05ccd692f93f"

@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+pytest-of-*/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+build/
+dist/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Secrets and local overrides
+.env
+.env.*
+*.key
+*.pem
+secrets/
+/.local/
+/_work/
+/_private-agent-runs/
+/releases/
+
+# Downloaded third-party sources and caches
+external/repos/
+.cache/
+cache/
+hf_cache/
+modelscope_cache/
+
+# Models, datasets, checkpoints, and tensor artifacts
+/artifacts/
+models/
+datasets/raw/
+datasets/processed/
+checkpoints/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.parquet
+*.arrow
+*.npy
+*.npz
+
+# Experiment output and development reports stay outside the clean checkout.
+runs/
+logs/
+wandb/
+tensorboard/
+ray_results/
+ray_tmp/
+outputs/
+*.log
+
+# Generated local metadata
+*.egg-info/
+reports/
+GOAL*.md
+*.pid
+*.stdout
+*.stderr
+*.tmp
+*.swp
+
+# Host-specific deployment recipes stay outside the portable source tree.
+deploy/

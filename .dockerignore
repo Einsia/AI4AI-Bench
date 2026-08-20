@@ -1,0 +1,33 @@
+# Keep the build context to exactly what the image needs. Without this, running
+# a harness script locally leaves a __pycache__ that COPY carries into
+# /opt/harness -- host-specific bytecode in a read-only directory, and one more
+# thing that can make two builds differ.
+.git
+.gitmodules
+.venv
+venv
+build
+dist
+*.egg-info
+__pycache__
+*.py[cod]
+.ruff_cache
+.pytest_cache
+.mypy_cache
+.DS_Store
+runs
+logs
+orchestrator/*
+!orchestrator/lifecycle.py
+!orchestrator/container_harness/
+!orchestrator/container_harness/*.sh
+README.md
+LICENSE
+!LICENSE
+!THIRD_PARTY_NOTICES.md
+pyproject.toml
+.pre-commit-config.yaml
+.dockerignore
+# The submodule is passed as a named build context, never through the root
+# context, so excluding it keeps the context small.
+tasks/*/environment/verl

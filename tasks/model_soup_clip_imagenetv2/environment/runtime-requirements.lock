@@ -1,0 +1,53 @@
+# Resolved inside this task's pinned base image, so these are the
+# packages that must be ADDED to that base, not a standalone closure. Resolving without
+# the base in scope produces a set that overwrites the base's own torch; see
+# the operator wheelhouse resolver's header comment.
+#
+# Each hash is the sha256 of the bytes in the wheelhouse, checked against what the index
+# reported. --require-hashes makes any later substitution a build failure.
+#
+# The lock targets CPython 3.11 and CUDA 12.8 from the declared base image.
+
+ftfy==6.3.1 \
+    --hash=sha256:7c70eb532015cd2f9adb53f101fb6c7945988d023a085d127d1573dc49dd0083
+
+# regex is ABI-specific, so its hash is tied to the CPython 3.11 wheel.
+regex==2026.7.19 \
+    --hash=sha256:09f3e5287f94f17b709dc9a9e70865855feee835c861613be144218ce4ca82cc
+
+# clip, from the pinned openai/CLIP commit. Not on any index -- CLIP has no PyPI release
+# -- so this line cannot come from the operator wheelhouse resolver, which resolves
+# against one: `--only-binary :all:` and a VCS requirement are mutually exclusive, and the
+# report pip writes for a VCS requirement carries a git+ URL and no archive hash.
+#
+# Built from the pinned commit with git supplied by the build context:
+#
+#   pip wheel --no-deps --no-build-isolation \
+#     git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33
+#
+# --no-build-isolation on purpose: CLIP's setup.py imports pkg_resources and clip/clip.py:6
+# does `from pkg_resources import packaging`, which setuptools 81 removed, so the wheel is
+# built against the base's own setuptools rather than whatever an isolated build environment
+# would fetch.
+#
+# Installed --no-deps. Its requirements are ftfy, regex, tqdm, torch and torchvision; the
+# first two are the lines above and the last three come from the base. `pip check`
+# validates the combined environment during the build.
+clip==1.0 \
+    --hash=sha256:94fc15541052cf3c2ba12295d83c3df0ed17568fcec49b783e1dd04fd91a9898
+
+# setuptools is a PIN, not a dependency, and it is here because CLIP imports a module
+# setuptools deleted. clip/clip.py:6 is `from pkg_resources import packaging`; pkg_resources
+# was removed in setuptools 81. The base ships 79.0.1, which still has it (measured: it
+# imports, with a DeprecationWarning, and packaging.version.parse works).
+#
+# Pinning it converts that from a coincidence into a checked fact. Without this line the
+# task depends on the base image's setuptools happening to be old enough, which is exactly
+# the class of dependency that breaks quietly when a base is refreshed -- and the failure
+# would surface as CLIP failing to import, four steps away from its cause.
+#
+# It also cannot be produced by the operator wheelhouse resolver: `pip install --dry-run`
+# against the base reports setuptools as already satisfied and omits it from the plan, so
+# this wheel was fetched explicitly by `pip download setuptools==79.0.1`.
+setuptools==79.0.1 \
+    --hash=sha256:e147c0549f27767ba362f9da434eab9c5dc0045d5304feb602a0af001089fc51

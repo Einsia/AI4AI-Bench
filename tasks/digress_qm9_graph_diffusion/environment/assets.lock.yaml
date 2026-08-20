@@ -1,0 +1,134 @@
+schema_version: 2
+task_id: digress_qm9_graph_diffusion
+
+# Every path here is an alias. A deployment profile maps aliases onto real
+# directories, so the repository carries no host layout.
+path_policy: repo_relative_aliases
+
+build_contexts:
+  network: none
+  # One context, unlike OPD's three: there is no wheelhouse (the image installs
+  # from conda and PyPI pins in the Dockerfile, carried over from the reference protocol
+  # unchanged) and no separate grader tree, because the grader IS the DiGress tree.
+  names: [digress_source]
+  reproducibility: >-
+    NOT YET ESTABLISHED for the v1 image. The reference protocol recorded an image ID from a
+    single build. Two network-disabled builds must agree before a digest is recorded
+    in task.toml, and what gets recorded is a `layers:` content fingerprint rather
+    than an ID -- an ID is the sha256 of the config blob and a registry round trip
+    rewrites it while the layers stay identical.
+
+assets:
+  digress_source:
+    kind: git_repository
+    source: https://github.com/cvignac/DiGress.git
+    revision: 780242b8d3e7d78316bb5cf90c639fb0cd4c6079
+    license: MIT
+    license_source: https://github.com/cvignac/DiGress/blob/780242b8d3e7d78316bb5cf90c639fb0cd4c6079/LICENSE
+    content_sha256: 7ec1585feaf7b313e25ec41e4e8fd7b943b0de8fea3e167e5b6da6f1bdd1a5bf
+    hash_kind: tree_manifest_sha256
+    file_count: 69
+    size_bytes: 39092561
+    hash_status: qualified_sealed_export_without_vcs_cache_20260728
+    # Copied to BOTH /workspace/digress and /opt/harness/digress. Not a mount, and
+    # not a submodule: it arrives through a named build context, and check_image.py
+    # asserts the two copies are byte-identical at build time.
+    baked_in:
+      - /workspace/digress   # editable, enters candidate.patch
+      - /opt/harness/digress # read-only, what the evaluators import
+    note: >-
+      On this task the sampler and the molecule metrics are the grader. Baking the
+      tree in twice is what makes "the evaluator does not change" checkable by
+      reading one Dockerfile, and it is why an Agent edit to /workspace/digress
+      changes training without changing scoring.
+
+  data/qm9_no_h:
+    kind: frozen_dataset
+    source: QM9 through the pinned DiGress preprocessing implementation
+    source_doi: 10.6084/m9.figshare.c.978904.v5
+    revision: digress-qm9-noh-public-v2
+    license: CC0-1.0
+    license_source: https://figshare.com/articles/dataset/Data_for_6095_constitutional_isomers_of_C7H10O2/1057646
+    content_sha256: b65604efd7614e37fad9568c69b88fee77306e83e2d319e92999385dc4135bac
+    hash_kind: tree_manifest_sha256
+    file_count: 13
+    size_bytes: 416122011
+    hash_status: reproducible_public_builder_export_20260819
+    mount: /assets/data/qm9_no_h
+    phases: [score]
+    materialize:
+      sources:
+        qm9:
+          tool: url
+          url: https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/molnet_publish/qm9.zip
+          filename: qm9.zip
+          sha256: f11d3f8ecc3097a72656a35c4847767852e6f346bf99a54619a1a3b6389ddc02
+          extract: true
+        uncharacterized:
+          tool: url
+          url: https://ndownloader.figshare.com/files/3195404
+          filename: uncharacterized.txt
+          sha256: 3aa5115d540b356de94791d4a74c3bf1ed91c469ecf52a4f5d7cc0506fe02e24
+        readme:
+          tool: huggingface_hub.snapshot_download
+          repo_type: dataset
+          repo_id: chao1224/Geom3D_data
+          revision: ec4743f20cf040d5648f824b65ee0985c00e4ec6
+          allow_patterns: [QM9/raw/QM9_README]
+      builder:
+        type: task_image
+        image: docker.io/chiyizhe/ai4ai@sha256:fea474c6027c689e3364e07a5dfa73f2d5cbd8c523498f0a46c6cd854da29ede
+        script: tools/asset_builders/build_digress_qm9.py
+        script_sha256: 99792c8cf185bd53c636c88856ed0e75f2c2c14f5dfe938703b05113337bf16a
+        command:
+          - python3
+          - /builder/repo/tools/asset_builders/build_digress_qm9.py
+          - --qm9
+          - "{source:qm9}"
+          - --uncharacterized
+          - "{source:uncharacterized}"
+          - --readme
+          - "{source:readme}"
+          - --output
+          - "{output}"
+    scope: >-
+      Full frozen export with the real train, validation and test tensors. It is
+      mounted only for formal scoring.
+
+  data/qm9_train_val:
+    kind: derived_dataset
+    revision: digress-qm9-noh-train-val-public-v2
+    content_sha256: be3b9a2200e53b3e58d0ede61378381fad650e05060b496696f57caf9bac16e5
+    hash_kind: tree_manifest_sha256
+    file_count: 6
+    size_bytes: 130053093
+    hash_status: derived_from_reproducible_public_builder_export_20260819
+    mount: /assets/data/qm9_no_h
+    phases: [explore, retrain]
+    materialize:
+      derive:
+        source_alias: data/qm9_no_h
+        copy:
+          - processed/proc_tr_no_h.pt
+          - processed/proc_val_no_h.pt
+          - processed/pre_filter.pt
+          - processed/pre_transform.pt
+          - train_smiles_no_h.npy
+        copy_as:
+          processed/proc_test_no_h.pt: processed/proc_val_no_h.pt
+    # Retained as the human-readable task contract used by older tooling. The
+    # executable materialize block above uses the same mapping.
+    derive:
+      source_asset: data/qm9_no_h
+      copy:
+        - processed/proc_tr_no_h.pt
+        - processed/proc_val_no_h.pt
+        - processed/pre_filter.pt
+        - processed/pre_transform.pt
+        - train_smiles_no_h.npy
+      copy_as:
+        processed/proc_test_no_h.pt: processed/proc_val_no_h.pt
+    scope: >-
+      Training and validation only. The pinned datamodule requires a test-named
+      processed tensor during setup, so proc_test_no_h.pt is a byte-identical alias
+      of proc_val_no_h.pt. No raw files or real test tensor enter exploration or retrain.

@@ -1,0 +1,32 @@
+# Direct requirements. runtime-requirements.lock is this set plus its transitive
+# closure, each pinned with a hash, and it is what the Dockerfile installs.
+#
+# torch is absent on purpose: it comes from the pinned base image
+# (pytorch/pytorch:2.8.0-cuda12.8-cudnn9-devel at a digest), and installing a
+# second copy over it is how a CUDA build gets silently replaced by a CPU wheel.
+#
+# One consequence of this set worth knowing, because it is not visible in the
+# pins: `trl==0.9.6` requires `numpy<2.0.0`, so resolving against the cu128 base
+# DOWNGRADES that base's numpy 2.3.2 to 1.26.4. That is not a regression -- 1.26.4
+# is what the old cu121 base shipped, so numpy is the one thing this base change
+# does not move -- but it does mean torch 2.8.0, built against numpy 2 headers,
+# runs here under numpy 1.x. Verified on the device: import, the .numpy()/
+# from_numpy() bridge, a bf16 matmul and sdpa all work. If trl is ever unpinned,
+# numpy moves with it and that check has to be redone.
+#
+# peft and trl were in the reference protocol's set and are kept. Nothing imports them
+# now -- the LoRA path was removed from the recipe before this port, and the old
+# checker actively rejected a method that imported either. They stay because v1
+# drops the objective-family ban: adapters are a legitimate thing for a candidate
+# to try, and a container with no network cannot install them at 3 a.m. of its
+# 4 hours.
+accelerate==1.0.1
+datasets==3.1.0
+huggingface-hub==0.26.5
+# LiveCodeBench's evaluator uses pebble for its per-program execution timeouts.
+pebble==5.1.1
+peft==0.12.0
+pyarrow==17.0.0
+safetensors==0.4.5
+transformers==4.46.1
+trl==0.9.6

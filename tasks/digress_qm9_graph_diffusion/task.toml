@@ -1,0 +1,60 @@
+schema_version = "1.5"
+name = "digress_qm9_graph_diffusion"
+
+[task]
+name = "ai4ai/digress-qm9-graph-diffusion"
+version = "1.0.0"
+description = "Improve molecular generation on fixed QM9 without hydrogens"
+
+[agent]
+timeout_sec = 14400
+
+[verifier]
+timeout_sec = 64800
+environment_mode = "separate"
+
+[x-ai4ai.formal]
+retrain_budget_sec = 43200
+artifact_limit = 3
+selection_rule = "best_valid_of_up_to_3"
+
+[environment]
+dockerfile = "environment/Dockerfile"
+image = "docker.io/chiyizhe/ai4ai@sha256:fea474c6027c689e3364e07a5dfa73f2d5cbd8c523498f0a46c6cd854da29ede"
+digest = "layers:905be359299a5aa47e0a42438a4d030c2c4bcc2ce26bfb79b97382bf401317e0"
+config_digest = "config:c82fdf953f691906df5c65181efa24e95b0179c97ecb53481bc7fa52870ae936"
+source_sha256 = "8b898c86e50eddafe4a38159f09056de3105ca8c53150de0a81ef8d2edcc6572"
+base_image_digest = "layers:0d41b40d18ace436d41943957efdba4ce4dbf542985e23b5fcbe0ad6ec926df2"
+base_image_config_digest = "config:ca7d249840885d4527cfc8c8680dfdf182271f82f3dab0bb20287cb2fbed896d"
+gpus = 1
+gpu_types = ["B300"]
+cpus = 8
+memory_mb = 65536
+storage_mb = 65536
+network_mode = "no-network"
+collective_backend = "gloo"
+build_args = { SOURCE_DATE_EPOCH = "1767225600", DIGRESS_BASE_IMAGE = "ai4ai/digress-base:v1.5-7d7436c0deed" }
+
+[x-ai4ai.container]
+shm_size = "8g"
+pids_limit = 4096
+
+[x-ai4ai.gpu]
+type = "B300"
+peak_memory_mib = 6284
+
+[assets]
+"data/qm9_no_h" = "QM9 hydrogens-removed, revision digress-qm9-noh-public-v2, reproducibly built and pinned by tree manifest"
+"data/qm9_train_val" = "public-v2 derived train/validation-only tree; validation aliases the datamodule test filename"
+
+[metadata]
+track = "v1"
+shipped_method = "digress_discrete_graph_diffusion"
+shipped_method_source = "cvignac/DiGress@780242b8d3e7d78316bb5cf90c639fb0cd4c6079"
+train_data = "QM9 hydrogens-removed, pinned preprocessing revision"
+fast_metric = "validity_uniqueness_novelty"
+fast_direction = "max"
+final_metric = "nll"
+final_direction = "min"
+reward_transform = "negate"
+evaluator_contract = "fast NLL is validation; formal upstream NLL is test; molecule split diagnostics are auxiliary and never gate or suppress upstream metrics"

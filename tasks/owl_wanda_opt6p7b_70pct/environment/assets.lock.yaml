@@ -1,0 +1,185 @@
+schema_version: 2
+task_id: owl_wanda_opt6p7b_70pct
+
+# Every path here is an alias. A deployment profile maps aliases onto real
+# directories, so the repository carries no host layout.
+path_policy: repo_relative_aliases
+
+build_contexts:
+  network: none
+  # The pinned OWL tree is materialized on the host and copied into the image at
+  # /workspace/owl, plus a wheel directory for the pinned Python stack. Same pattern
+  # as OPD's justrl_source: pinned by revision, supplied at build time, not a
+  # submodule.
+  names: [owl_source, git_deb, wheelhouse]
+  reproducibility: two network-disabled builds must agree before a digest is recorded
+
+assets:
+  owl_source:
+    kind: git_repository
+    source: https://github.com/luuyin/OWL.git
+    revision: dddb7a4bffe27c73e4c8cf692b3a5e36401532c8
+    license: MIT
+    content_sha256: defbb8da86183001232724893c74d99fc93b13e86f88d2bc20781c2b0c0de14c
+    hash_kind: tree_manifest_sha256
+    file_count: 27
+    size_bytes: 1361621
+    postprocess: remove .git metadata before the tree hash is taken
+    note: >-
+      Build-time only, and this is a change of kind from the reference protocol. There it was
+      a read-only RUNTIME mount at upstreams/runtime/owl-wanda, so the Agent could
+      not touch the pruning implementation. In v1 the framework is not a fixed input,
+      so the tree is copied into /workspace/owl and is editable -- lib/prune_all.py
+      holds the Wanda metric, OWL's layer allocation and return_given_alpha.
+
+  models/dense:
+    kind: model
+    source: facebook/opt-6.7b
+    revision: a45aa65bbeb77c1558bc99bedc6779195462dab0
+    license: OPT-175B
+    license_source: https://huggingface.co/facebook/opt-6.7b/blob/a45aa65bbeb77c1558bc99bedc6779195462dab0/LICENSE.md
+    content_sha256: 51429f246012bd13dd789ba76fc83bc781b8ed7f226c6a3cf108d09b0eeaade4
+    hash_kind: tree_manifest_sha256
+    size_bytes: 13318532446
+    mount: /assets/models/dense
+    phases: [explore, retrain]
+    download:
+      tool: huggingface_hub.snapshot_download
+      repo_id: facebook/opt-6.7b
+      revision: a45aa65bbeb77c1558bc99bedc6779195462dab0
+      allow_patterns:
+        - .gitattributes
+        - LICENSE.md
+        - README.md
+        - config.json
+        - generation_config.json
+        - merges.txt
+        - pytorch_model*.bin
+        - pytorch_model.bin.index.json
+        - special_tokens_map.json
+        - tokenizer_config.json
+        - vocab.json
+    note: >-
+      The whole pinned snapshot. The pruned artifact is the same dtype and shapes --
+      unstructured sparsity writes zeros rather than compressing -- so the export is
+      also about 12.4 GiB.
+
+  data/c4:
+    kind: dataset
+    source: allenai/c4
+    revision: 1588ec454efa1a09f29cd18ddd04fe05fc8653a2
+    license: ODC-BY
+    required_files:
+      - en/c4-train.00000-of-01024.json.gz
+      - en/c4-validation.00000-of-00008.json.gz
+    content_sha256: 3154d2ec7f1a67977fb601c0ebf2c2af160615990e11c811aff2033884f14068
+    hash_kind: tree_manifest_sha256
+    size_bytes: 359821884
+    mount: /assets/data/c4
+    phases: [explore, retrain]
+    download:
+      tool: huggingface_hub.snapshot_download
+      repo_type: dataset
+      repo_id: allenai/c4
+      revision: 1588ec454efa1a09f29cd18ddd04fe05fc8653a2
+      allow_patterns:
+        - .gitattributes
+        - README.md
+        - en/c4-train.00000-of-01024.json.gz
+        - en/c4-validation.00000-of-00008.json.gz
+    note: >-
+      THE WHOLE SHARD, NOT A SAMPLE OF IT. The old task calibrated on "128 sequences,
+      seed 0" and froze that, but the mount was always the entire train shard and the
+      128 was a runtime argument to upstream's get_c4, which draws documents
+      pseudorandomly from the whole file. So raising CALIBRATION_SAMPLES works: the
+      container holds document 129.
+
+      It is nonetheless shard 0 of C4 en's 1024 train shards, not all of C4. That is
+      the pinned artifact and every recorded number for this task was calibrated from
+      it, so the shard identity is part of the protocol even though the sample count
+      is not.
+
+      c4-validation is loaded by the same upstream function and its result is
+      discarded -- the pruning path uses only the train loader. It is kept because
+      upstream's signature returns both and the loader requires both files to exist.
+      It is C4 validation, unrelated to the WikiText2 evaluation splits.
+
+  data/wikitext2/validation:
+    kind: dataset
+    source: Salesforce/wikitext
+    revision: b08601e04326c79dfdd32d625aee71d232d685c3
+    license: CC-BY-SA-3.0-and-GFDL
+    required_files:
+      - validation-00000-of-00001.parquet
+    source_path: wikitext-2-raw-v1/validation-00000-of-00001.parquet
+    # The reference protocol's public_validation asset shipped train + validation under one
+    # alias with a single tree hash covering both. Only validation is read, so only
+    # validation is mounted; the tree hash below therefore no longer applies as
+    # written, so a per-file sha256 is recorded instead.
+    #
+    # File identity for the exploration-only validation split.
+    content_sha256: 204929b7ff9d6184953f867dedb860e40aa69c078fc1e54b3baaa8fb28511c4c
+    hash_kind: file_sha256
+    size_bytes: 657209
+    superseded_tree_hash: b91ddc1035eefd9a8179f947eebf3e8c1c83ae17f3f09e993849acee3223de08
+    mount: /assets/data/wikitext2/validation
+    phases: [explore]
+    download:
+      tool: huggingface_hub.snapshot_download
+      repo_type: dataset
+      repo_id: Salesforce/wikitext
+      revision: b08601e04326c79dfdd32d625aee71d232d685c3
+      allow_patterns: [wikitext-2-raw-v1/validation-00000-of-00001.parquet]
+      materialize: copy source_path to the alias root using its basename
+    note: >-
+      The proxy. fast_eval.sh reads it; the scoring phase does not. The reference protocol
+      also shipped wikitext-2-raw-v1/train-00000-of-00001.parquet in this asset and
+      NOTHING read it -- the evaluator only ever opened validation -- so it is not
+      carried here.
+
+  data/wikitext2/test:
+    kind: dataset
+    source: Salesforce/wikitext
+    revision: b08601e04326c79dfdd32d625aee71d232d685c3
+    license: CC-BY-SA-3.0-and-GFDL
+    required_files:
+      - test-00000-of-00001.parquet
+    source_path: wikitext-2-raw-v1/test-00000-of-00001.parquet
+    # final_eval.py also verifies the expected 140-block shape.
+    content_sha256: 5f1bea067869d04849c0f975a2b29c4ff47d867f484f5010ea5e861eab246d91
+    hash_kind: file_sha256
+    size_bytes: 732610
+    expected_blocks: 140
+    mount: /assets/data/wikitext2/test
+    phases: [score]
+    download:
+      tool: huggingface_hub.snapshot_download
+      repo_type: dataset
+      repo_id: Salesforce/wikitext
+      revision: b08601e04326c79dfdd32d625aee71d232d685c3
+      allow_patterns: [wikitext-2-raw-v1/test-00000-of-00001.parquet]
+      materialize: copy source_path to the alias root using its basename
+    note: >-
+      MATERIALISED. This file said "THIS ASSET DOES NOT EXIST TASK-SIDE YET, AND THE
+      FINAL CANNOT RUN WITHOUT IT" while three baseline finals had already been scored
+      against it -- 53.9974564115, 52.6179878550 and 53.4615152308, each reporting 140
+      blocks. A lock file that denies the existence of the asset its own recorded numbers
+      were measured on is worse than one with a gap in it, because the gap invites
+      someone to fetch the file while the denial invites them to conclude the numbers
+      are fabricated.
+
+      The reference protocol never shipped it. Its assets.lock.yaml listed only train and
+      validation, and its environment/check.sh went further and actively asserted the
+      absence of this exact path:
+
+        test ! -e "${LLMAB_ARTIFACT_ROOT}/datasets/owl-wanda-wikitext2-public/\
+      wikitext-2-raw-v1/test-00000-of-00001.parquet"
+
+      The test-split numbers that do exist -- 10.860 dense, 53.988 baseline, 42.241
+      maintainer-tuned, 165.775 uniform-Wanda control -- were produced judge-side
+      against a separate hidden asset manifest that is not in this repository.
+
+      The data is public: Salesforce/wikitext at the same revision as validation, and
+      the same snapshot_download call with one more allow_pattern. Nothing is secret
+      here; the split is withheld from exploration by the mount list, not by
+      obscurity.

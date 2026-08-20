@@ -1,0 +1,14 @@
+# Runtime dependencies added to the declared CPython 3.11/CUDA 12.8 base.
+# The adjacent hash lock is installed from an offline wheelhouse. CLIP has no PyPI
+# release, so its pinned commit is converted to a wheel explicitly:
+#
+#   pip wheel --no-deps --no-build-isolation \
+#     git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33
+#
+# The wheel and all index dependencies are pinned by byte hash in the lock.
+#
+# setuptools is an explicit compatibility pin because CLIP imports pkg_resources.
+ftfy==6.3.1
+regex==2026.7.19
+clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33
+setuptools==79.0.1

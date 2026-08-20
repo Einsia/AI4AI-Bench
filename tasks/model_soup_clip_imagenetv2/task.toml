@@ -1,0 +1,56 @@
+schema_version = "1.5"
+name = "model_soup_clip_imagenetv2"
+
+[task]
+name = "ai4ai/model-soup-clip-imagenetv2"
+version = "1.0.0"
+description = "Build a better weight-space soup from 72 frozen CLIP ViT-B/32 ingredients"
+
+[agent]
+timeout_sec = 14400
+
+[verifier]
+timeout_sec = 75600
+environment_mode = "separate"
+
+[x-ai4ai.formal]
+retrain_budget_sec = 43200
+artifact_limit = 3
+selection_rule = "best_valid_of_up_to_3"
+
+[environment]
+dockerfile = "environment/Dockerfile"
+image = "docker.io/chiyizhe/ai4ai@sha256:25d70889946756e8c1ef386a30f1d4aaa7c165f9371eb9638d39c3bbcccca2e1"
+digest = "layers:b9b1753ea0b5d78c2eb95b3d2936efd3f61753d3f0ab6b885b7ee10a19d77164"
+config_digest = "config:849a0afc2f71f0cbf6506ea5b4fbcfc22fad810807d73fabbf8425775fb549c4"
+source_sha256 = "bad808be86ece3ef87c87f0470b88f007a4fd9b33a588829daac04faafd62683"
+gpus = 1
+gpu_types = ["B300"]
+cpus = 8
+memory_mb = 65536
+storage_mb = 131072
+network_mode = "no-network"
+
+[x-ai4ai.container]
+shm_size = "8g"
+pids_limit = 4096
+
+[x-ai4ai.gpu]
+type = "B300"
+peak_memory_mib = 2222
+
+[assets]
+"models/clip" = "OpenAI CLIP ViT-B/32 payload sha256 40d365715913c9da98579312b702a82c18be219cc2a73407c4526f58eba950af"
+"models/ingredients" = "model-soups release v0.0.2, 72 checkpoints, pinned tree manifest in assets.lock.yaml"
+"data/imagenetv2_proxy" = "matched-frequency offsets 0-1, 2000 images, exploration only"
+"data/imagenetv2_final" = "matched-frequency full 10000 images, score only"
+
+[metadata]
+track = "v1"
+shipped_method = "weight_space_model_soup"
+shipped_method_source = "mlfoundations/model-soups@v0.0.2"
+base_model = "OpenAI CLIP ViT-B/32 architecture with 72 fixed fine-tuned ingredients"
+fast_metric = "imagenetv2_top1_proxy2000"
+fast_direction = "max"
+final_metric = "imagenetv2_top1_full10000"
+final_direction = "max"

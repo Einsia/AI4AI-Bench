@@ -1,0 +1,118 @@
+# Resolved on the B300 host INSIDE this task's own base image, so these are the packages
+# that must be ADDED to that base rather than a standalone closure. Resolving without the
+# base in scope produces a set that overwrites the base's own torch; see the header of
+# the operator wheelhouse resolver.
+#
+# Each hash is the sha256 of the bytes in the wheelhouse, which is what --require-hashes
+# checks at build time. For the 23 members PyPI publishes as wheels it is also the hash the
+# index reported, verified here.
+#
+# THIS LOCK WAS RE-RESOLVED FOR A NEW BASE IMAGE. It was cu121/py3.10; it is now
+# cu128/py3.11 -- pytorch/pytorch:2.8.0-cuda12.8-cudnn9-devel@sha256:a7103283. The old base
+# cannot execute a single kernel on this card (Blackwell sm_103; its arch list stops at
+# sm_90 with no compute_XX PTX to JIT forward, so a bare matmul raises "no kernel image is
+# available for execution on the device"). The Dockerfile's header records the measurement.
+#
+# The PACKAGE SET AND EVERY VERSION IS UNCHANGED from the cu121 resolve, which is the point:
+# what moved is the ABI tag of the four compiled members, cp310 -> cp311, namely pydantic,
+# regex, setproctitle and tokenizers. protobuf and safetensors are abi3 and their files are
+# byte-identical to before. So the hashes below differ from the previous lock for exactly
+# those four plus the two built locally, and for numpy, which is new.
+#
+# ONE MEMBER DOWNGRADES THE BASE: numpy==1.26.4, over the 2.3.2 the new base ships. It is
+# the only line here that does not merely add to the base. wandb 0.15.12 runs
+# `NumberType.types.append(np.float_)` at import time and numpy 2.0 removed np.float_;
+# diffusers reaches wandb unconditionally through accelerate.tracking, so on numpy 2 this
+# task cannot import diffusers at all. See runtime-requirements.in for the compatibility
+# check behind the fixed 1.26.4 pin.
+#
+# TWO MEMBERS ARE NOT PUBLISHED AS WHEELS, and that is why the shared resolve script cannot
+# produce this wheelhouse: it resolves with --only-binary :all:, under which pip reports
+#   Could not find a version that satisfies the requirement ml-collections==0.1.1
+#   (from versions: 0.1.0, 1.0.0, 1.1.0)
+# -- 0.1.1 exists, but only as ml_collections-0.1.1.tar.gz. pathtools==0.1.2, which
+# wandb 0.15.12 requires, is in the same state. Reproduced on the new base: the resolve fails
+# with "No matching distribution found for pathtools" until both are on --find-links.
+#
+# The two pinned sdists were converted to wheels in the same base image,
+# because a wheel built under the old base is not the artifact this one installs:
+#
+#   pip download --no-deps --no-binary :all: --dest /sd ml-collections==0.1.1 pathtools==0.1.2
+#   pip wheel --no-deps --wheel-dir /sd/built /sd/*.tar.gz
+#
+# Builder: python 3.11.13, pip 25.1.1, setuptools 79.0.1, wheel 0.45.1. Both are py3-none-any,
+# so the rebuild changes the bytes (pip and setuptools stamp their own versions into the
+# metadata) and not the importable content; the sdist sha256 on the line above each is
+# unchanged from the cu121 lock, which is the part that is verifiable against PyPI.
+#
+# Same shape as the git .debs: fetch where there is network, pin the bytes, keep the image
+# build --network=none.
+
+absl-py==2.5.0 \
+    --hash=sha256:0f17b89f2a4eaaedc4f28c622998aa690564b3012a396a4ffad0821007fe03ba
+accelerate==0.20.3 \
+    --hash=sha256:147183e7a2215f7bd45a7af3b986a963daa8a61fa58b0912b9473049e011ad15
+# transitive
+appdirs==1.4.4 \
+    --hash=sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128
+# transitive
+contextlib2==21.6.0 \
+    --hash=sha256:3fbdb64466afd23abaf6c977627b75b6139a5a3e8ce38405c5b413aed7a0471f
+diffusers==0.17.1 \
+    --hash=sha256:e724e3d1707c84e5ac20a48543c55c27db726899fda424775eac5263bb733fb6
+# transitive
+docker-pycreds==0.4.0 \
+    --hash=sha256:7266112468627868005106ec19cd0d722702d2b7d5912a28e19b826c3d37af49
+# transitive
+gitdb==4.0.12 \
+    --hash=sha256:67073e15955400952c6565cc3e707c554a4eea2e428946f7a4c162fab9bd9bcf
+# transitive
+GitPython==3.1.57 \
+    --hash=sha256:4ccf7d73c10f5c9e76043fbb2675ac5a1b3ff5b41e648f56bcbed5f63792ecaf
+huggingface-hub==0.16.4 \
+    --hash=sha256:0d3df29932f334fead024afc7cb4cc5149d955238b8b5e42dcf9740d6995a349
+# transitive
+importlib_metadata==9.0.0 \
+    --hash=sha256:2d21d1cc5a017bd0559e36150c21c830ab1dc304dedd1b7ea85d20f45ef3edd7
+inflect==6.0.4 \
+    --hash=sha256:2d592e7e4eafb6e51f9c626c5dd4288f5ce55981eaac9b342e868ead95ead5c3
+# direct, built from the sdist: ml_collections-0.1.1.tar.gz
+#   index sha256 of that sdist: 3fefcc72ec433aa1e5d32307a3e474bbb67f405be814ea52a2166bfc9dbe68cc
+ml_collections==0.1.1 \
+    --hash=sha256:f5e09adc91e9a18c3719324696892d57ce67d6d59b7e71f2801292039e56472c
+numpy==1.26.4 \
+    --hash=sha256:666dbfb6ec68962c033a450943ded891bed2d54e6755e35e5835d63f4f6931d5
+# transitive, built from the sdist: pathtools-0.1.2.tar.gz
+#   index sha256 of that sdist: 7c35c5421a39bb82e58018febd90e3b6e5db34c5443aaaf742b3f33d4655f1c0
+pathtools==0.1.2 \
+    --hash=sha256:be5ce8d82fd6ba6402e27d0c04f2ca4cde8803ed94b0d8486eeb1c9c92195cc5
+# transitive
+protobuf==4.25.9 \
+    --hash=sha256:438c636de8fb706a0de94a12a268ef1ae8f5ba5ae655a7671fcda5968ba3c9be
+pydantic==1.10.9 \
+    --hash=sha256:07293ab08e7b4d3c9d7de4949a0ea571f11e4557d19ea24dd3ae0c524c0c334d
+# transitive
+regex==2026.7.19 \
+    --hash=sha256:09f3e5287f94f17b709dc9a9e70865855feee835c861613be144218ce4ca82cc
+# transitive
+safetensors==0.8.0 \
+    --hash=sha256:fd6f3f93c9a0a7cc2788ee63fb763353d4bd2e89b0751bc78fcf7dda00bea774
+# transitive
+sentry-sdk==2.66.1 \
+    --hash=sha256:86002793161d9a95ef04bdd8d442e9bfece5d989b755f05d6360215094a7aff6
+# transitive
+setproctitle==1.3.7 \
+    --hash=sha256:1607b963e7b53e24ec8a2cb4e0ab3ae591d7c6bf0a160feef0551da63452b37f
+# transitive
+smmap==5.0.3 \
+    --hash=sha256:c106e05d5a61449cf6ba9a1e650227ecfb141590d2a98412103ff35d89fc7b2f
+# transitive
+tokenizers==0.13.3 \
+    --hash=sha256:9ba2b0bf01777c9b9bc94b53764d6684554ce98551fec496f71bc5be3a03e98b
+transformers==4.30.2 \
+    --hash=sha256:c332e3a3097f9ed89ce556b403251235931c00237b8bc2d7adaa19d226c13f1d
+wandb==0.15.12 \
+    --hash=sha256:75c57b5bb8ddae21d45a02f644628585bdd112fea686de3177099a0996f1c41c
+# transitive
+zipp==4.1.0 \
+    --hash=sha256:25ad4e16390cd314347dd8f1de67a2ac538ae658ed4ab9db16029c07c188e97f

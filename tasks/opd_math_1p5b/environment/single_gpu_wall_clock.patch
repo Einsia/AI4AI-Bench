@@ -1,0 +1,142 @@
+diff --git a/verl/trainer/main_ppo.py b/verl/trainer/main_ppo.py
+index 8f6cd416..f9b90cea 100644
+--- a/verl/trainer/main_ppo.py
++++ b/verl/trainer/main_ppo.py
+@@ -176,7 +176,8 @@ class TaskRunner:
+             config.reward.reward_model.n_gpus_per_node = config.trainer.n_gpus_per_node
+ 
+         distillation_config = config.get("distillation")
+-        if is_distillation_enabled(distillation_config):
++        colocate_teacher = config.trainer.get("colocate_teacher", False)
++        if is_distillation_enabled(distillation_config) and not colocate_teacher:
+             if distillation_config.n_gpus_per_node <= 0:
+                 raise ValueError("config.distillation.n_gpus_per_node must be greater than 0")
+             if distillation_config.nnodes <= 0:
+@@ -184,6 +185,8 @@ class TaskRunner:
+ 
+             teacher_pool = [distillation_config.n_gpus_per_node] * distillation_config.nnodes
+             resource_pool_spec["teacher_pool"] = teacher_pool
++        elif is_distillation_enabled(distillation_config):
++            print("Colocating the distillation teacher in the actor global_pool")
+ 
+         from verl.trainer.ppo.ray_trainer import ResourcePoolManager
+ 
+@@ -207,9 +210,8 @@ class TaskRunner:
+         from verl.trainer.ppo.ray_trainer import Role
+ 
+         if is_distillation_enabled(config.get("distillation")):
+-            # we do not use teacher model workers, so we only register teacher model in resource pool
+-            # without registering a teacher model worker in role-worker mapping
+-            self.mapping[Role.TeacherModel] = "teacher_pool"
++            colocate_teacher = config.trainer.get("colocate_teacher", False)
++            self.mapping[Role.TeacherModel] = "global_pool" if colocate_teacher else "teacher_pool"
+ 
+     def add_ref_policy_worker(self, config, ref_policy_cls):
+         """Ref policy is fused into ActorRolloutRefWorker in the unified model engine.
+diff --git a/verl/trainer/ppo/ray_trainer.py b/verl/trainer/ppo/ray_trainer.py
+index d1eaa7bd..fdb356a5 100644
+--- a/verl/trainer/ppo/ray_trainer.py
++++ b/verl/trainer/ppo/ray_trainer.py
+@@ -20,6 +20,7 @@ This trainer supports model-agonistic model initialization with huggingface
+ 
+ import json
+ import os
++import time
+ import uuid
+ from collections import defaultdict
+ from concurrent.futures import ThreadPoolExecutor
+@@ -1390,6 +1391,9 @@ class RayPPOTrainer:
+                 self._shutdown_dump_executor()
+                 return
+-
++
++        if self.use_teacher_policy:
++            self.teacher_model_manager.sleep_replicas()
++
+         if self.config.actor_rollout_ref.rollout.skip.get("enable", False):
+             rollout_skip = RolloutSkip(self.config, self.async_rollout_manager)
+             rollout_skip.wrap_generate_sequences()
+@@ -1409,6 +1413,15 @@ class RayPPOTrainer:
+         # we start from step 1
+         self.global_steps += 1
+         last_val_metrics = None
++        training_started = time.monotonic()
++        max_wall_time = self.config.trainer.get("max_wall_time_seconds", None)
++        deadline_reserve = self.config.trainer.get("deadline_reserve_seconds", 0)
++        if max_wall_time is not None and max_wall_time <= deadline_reserve:
++            raise ValueError("max_wall_time_seconds must exceed deadline_reserve_seconds")
++        training_deadline = (
++            training_started + max_wall_time - deadline_reserve if max_wall_time is not None else None
++        )
++        last_step_duration = 0.0
+         self.max_steps_duration = 0
+ 
+         prev_step_profile = False
+@@ -1461,13 +1474,22 @@ class RayPPOTrainer:
+                     combined_gen_batch = gen_batch_output
+                     num_sampled_prompts = len(gen_batch_output)
+ 
+-                is_last_step = self.global_steps >= self.total_training_steps
++                wall_clock_last_step = (
++                    training_deadline is not None
++                    and last_step_duration > 0
++                    and time.monotonic() + 1.2 * last_step_duration >= training_deadline
++                )
++                is_last_step = self.global_steps >= self.total_training_steps or wall_clock_last_step
+                 with marked_timer("step", timing_raw):
+                     # generate a batch
+                     with marked_timer("gen", timing_raw, color="red"):
+                         if curr_step_profile:
+                             self.llm_server_manager.start_profile()
++                        if self.use_teacher_policy:
++                            self.teacher_model_manager.wake_up_replicas()
+                         combined_gen_output = self.async_rollout_manager.generate_sequences(combined_gen_batch)
+                         self.checkpoint_manager.sleep_replicas()
++                        if self.use_teacher_policy:
++                            self.teacher_model_manager.sleep_replicas()
+                         if curr_step_profile:
+                             self.llm_server_manager.stop_profile()
+@@ -1708,12 +1730,15 @@ class RayPPOTrainer:
+ 
+                 steps_duration = timing_raw["step"]
+                 self.max_steps_duration = max(self.max_steps_duration, steps_duration)
++                last_step_duration = steps_duration
+ 
+                 # training metrics
+                 metrics.update(
+                     {
+                         "training/global_step": self.global_steps,
+                         "training/epoch": epoch,
++                        "training/wall_elapsed_seconds": time.monotonic() - training_started,
++                        "training/wall_clock_last_step": float(wall_clock_last_step),
+                     }
+                 )
+                 # collect metrics
+diff --git a/verl/experimental/teacher_loop/teacher_model.py b/verl/experimental/teacher_loop/teacher_model.py
+index b03b85f2..929947b1 100644
+--- a/verl/experimental/teacher_loop/teacher_model.py
++++ b/verl/experimental/teacher_loop/teacher_model.py
+@@ -202,3 +202,23 @@ class MultiTeacherModelManager:
+                 load_balancer_handle=manager.load_balancer_handle,
+             )
+         return teacher_clients
++
++    def wake_up_replicas(self):
++        """Restore teacher KV caches before distillation scoring."""
++        _run_all(
++            [
++                replica.wake_up()
++                for manager in self.teacher_model_managers.values()
++                for replica in manager.rollout_replicas
++            ]
++        )
++
++    def sleep_replicas(self):
++        """Release teacher KV caches before colocated actor training."""
++        _run_all(
++            [
++                replica.sleep()
++                for manager in self.teacher_model_managers.values()
++                for replica in manager.rollout_replicas
++            ]
++        )

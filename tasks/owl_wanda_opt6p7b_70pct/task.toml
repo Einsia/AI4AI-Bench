@@ -1,0 +1,59 @@
+schema_version = "1.5"
+name = "owl_wanda_opt6p7b_70pct"
+
+[task]
+name = "ai4ai/owl-wanda-opt6p7b-70pct"
+version = "1.0.0"
+description = "Improve activation-aware pruning of OPT-6.7B at exact 70 percent unstructured sparsity"
+
+[agent]
+timeout_sec = 14400
+
+[verifier]
+timeout_sec = 64800
+environment_mode = "separate"
+
+[x-ai4ai.formal]
+retrain_budget_sec = 43200
+artifact_limit = 3
+selection_rule = "best_valid_of_up_to_3"
+
+[environment]
+dockerfile = "environment/Dockerfile"
+image = "docker.io/chiyizhe/ai4ai@sha256:f5c2af25c85a114a3504b99048a477316142f874b110de7ef18e85460a7b3bac"
+digest = "layers:57ca0d1c44f767366d6b953f8901ee56268831cfa7a62a077944a6b80e1db1c6"
+config_digest = "config:c5d55e755b0b79f46abff44904387036460d5e2fc68879e909b0d1733e988b99"
+source_sha256 = "10244a38cd092fa3270d4d9b725f3f420480bf319f73cdd76d4dd832eba3d165"
+gpus = 1
+gpu_types = ["B300"]
+cpus = 8
+memory_mb = 65536
+storage_mb = 262144
+network_mode = "no-network"
+build_args = { SOURCE_DATE_EPOCH = "1767225600" }
+
+[x-ai4ai.container]
+shm_size = "8g"
+pids_limit = 4096
+
+[x-ai4ai.gpu]
+type = "B300"
+peak_memory_mib = 23340
+
+[assets]
+"models/dense" = "facebook/opt-6.7b@a45aa65bbeb77c1558bc99bedc6779195462dab0"
+"data/c4" = "allenai/c4@1588ec454efa1a09f29cd18ddd04fe05fc8653a2, pinned English shard"
+"data/wikitext2/validation" = "Salesforce/wikitext@b08601e0, fast evaluation only"
+"data/wikitext2/test" = "Salesforce/wikitext@b08601e0, score only"
+
+[metadata]
+track = "v1"
+shipped_method = "owl_wanda_unstructured_pruning"
+shipped_method_source = "luuyin/OWL@dddb7a4bffe27c73e4c8cf692b3a5e36401532c8"
+base_model = "facebook/opt-6.7b@a45aa65b"
+fast_metric = "wikitext2_validation_perplexity"
+fast_direction = "min"
+final_metric = "wikitext2_test_perplexity"
+final_direction = "min"
+reward_transform = "negate"
+final_gate = "decoder sparsity in [0.699, 0.701] and loadable artifact"

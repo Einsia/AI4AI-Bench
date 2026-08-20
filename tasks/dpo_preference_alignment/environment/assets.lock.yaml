@@ -1,0 +1,181 @@
+schema_version: 2
+task_id: dpo_preference_alignment
+
+# Every path here is an alias. A deployment profile maps aliases onto real
+# directories, so the repository carries no host layout.
+path_policy: repo_relative_aliases
+
+build_contexts:
+  network: none
+  names: [git_deb, wheelhouse]
+  reproducibility: two network-disabled builds must agree before a digest is recorded
+
+assets:
+  upstream:
+    kind: git_repository
+    source: https://github.com/huggingface/alignment-handbook.git
+    revision: 1de1fc996972aa76b7d40c64c07b66dec8b6976a
+    license: Apache-2.0
+    content_sha256: cbc7b85d1835f1ca936e894bfc2fca1fe5567ff2ae0c2cb683e6ff51c8c98574
+    hash_kind: tree_manifest_sha256
+    size_bytes: 200114
+    mount: none
+    phases: []
+    note: >-
+      Provenance only, and deliberately not mounted. The reference protocol mounted it
+      as `upstreams/runtime/alignment-handbook` for "source_provenance_and_recipe
+      parity" -- there was a check that the candidate recipe still matched upstream's.
+      That check is gone, so the tree is recorded and not carried.
+
+  models/policy_start:
+    kind: derived_model
+    source: mistralai/Mistral-7B-v0.1 + alignment-handbook/zephyr-7b-sft-qlora
+    source_revisions:
+      mistralai/Mistral-7B-v0.1: 27d67f1b5f57dc0953326b2601d68371d40ea8da
+      alignment-handbook/zephyr-7b-sft-qlora: 156bec577ff12a65236cfc90860dcc61e96c6fd6
+    license: Apache-2.0
+    content_sha256: 5b12cef3fb456a43bcb2a364e645063704c3c128ff096fb127c635886bb02c96
+    hash_kind: tree_manifest_sha256
+    size_bytes: 14487030437
+    mount: /assets/models/policy_start
+    phases: [explore, retrain, score]
+    derivation: >-
+      merge the pinned Zephyr SFT QLoRA adapter into the pinned Mistral-7B-v0.1 base,
+      then save a safetensors checkpoint and tokenizer.
+    materialize:
+      sources:
+        base:
+          tool: huggingface_hub.snapshot_download
+          repo_type: model
+          repo_id: mistralai/Mistral-7B-v0.1
+          revision: 27d67f1b5f57dc0953326b2601d68371d40ea8da
+        adapter:
+          tool: huggingface_hub.snapshot_download
+          repo_type: model
+          repo_id: alignment-handbook/zephyr-7b-sft-qlora
+          revision: 156bec577ff12a65236cfc90860dcc61e96c6fd6
+      builder:
+        type: task_image
+        image: docker.io/chiyizhe/ai4ai@sha256:b020d14e02f9088aca1c0015eeefb4a78758a4e18516114a0a2c8f2f3d9be820
+        script: tools/asset_builders/merge_dpo_policy.py
+        script_sha256: 06a7fbcf334220c642f2e9d35d59125865de2c19dcd09df55540d569324fe322
+        command:
+          - python3
+          - /builder/repo/tools/asset_builders/merge_dpo_policy.py
+          - --base
+          - "{source:base}"
+          - --adapter
+          - "{source:adapter}"
+          - --output
+          - "{output}"
+    note: >-
+      One tree, three roles, which is why it is named for none of them: it is the
+      training start, it is the frozen DPO reference policy (reached by disabling the
+      adapter rather than by loading a second copy), and it is the backbone the score
+      phase applies an adapter-shaped submission to. The reference protocol called it
+      `models/zephyr-7b-sft-start` and separately pinned the same tree hash in
+      task.toml, eval/training-start-replay.json and the evaluator's constants.
+
+      Mounted into the score phase as well as the training ones. That is new and it is
+      what lets a candidate hand back a LoRA adapter instead of a merged 14.5 GiB
+      model: the backbone then provably comes from this mount rather than from the
+      submission. See harness/checkpoint.py.
+
+  data/ultrafeedback:
+    kind: dataset
+    source: HuggingFaceH4/ultrafeedback_binarized
+    revision: 3949bf5f8c17c394422ccfab0c31ea9c20bdeb85
+    license: MIT
+    content_sha256: 87be43558afc078e4a01a3004a4e51e46dda3231610b29a21f2465e3703003a9
+    hash_kind: tree_manifest_sha256
+    size_bytes: 649976032
+    expected_split_rows:
+      train_prefs: 61135
+      test_prefs: 2000
+    row_count_status: verified_against_staged_pinned_export
+    mount: /assets/data/ultrafeedback
+    phases: [explore, retrain]
+    note: >-
+      The whole snapshot, both splits. train_prefs is the preference pool and
+      test_prefs is what the trainer's own reward-accuracy eval reads.
+
+      The shipped recipe takes 8192 rows of train_prefs and 128 of test_prefs, and on
+      the reference protocol those counts were frozen by a recipe check -- "the formal
+      candidate uses the same frozen 8192-pair pool". They are defaults now, so the
+      whole split has to be here: a candidate that raises TRAIN_SAMPLES must find real
+      rows rather than an error. This is the spec's rule 1.
+
+  data/ifeval_final:
+    kind: dataset
+    source: google/IFEval
+    revision: 966cd89545d6b6acfd7638bc708b98261ca58e84
+    license: Apache-2.0
+    expected_rows: 541
+    file: ifeval_input_data.jsonl
+    content_sha256: 6a85310ca8ce15eff755aa08a3a4ff931c7e273e7515ebb3c492ea85fd8288f2
+    hash_kind: file_sha256
+    file_size_bytes: 207111
+    file_count: 3
+    size_bytes: 214941
+    hash_status: verified_against_staged_pinned_export
+    mount: /assets/data/ifeval_final
+    phases: [score]
+    note: >-
+      The whole 541-row source, not a pre-sliced 413. The score container cuts the
+      tiers itself with harness/grade.split_source, so the row arithmetic is
+      recomputed where it is used: 541 = 128 retired + 413 final, and 413 = 128 proxy
+      + 285 held out.
+
+      The ordering is anchored rather than assumed. grade.require_legacy_ordering
+      reproduces public_keys_sha256
+      c395d8bcee8447ddd5bcb179ce1ceeea45a9eb5ca3c763ea61e92761b8e29b9a, recorded in
+      the reference protocol's lock over the 128 keys of the retired projection. That
+      digest is the only committed value tying today's rows to the runs the recorded
+      baselines came from, and every tier moves if the sort changes.
+
+      Not mounted during exploration, which is what stops 4 h being spent tuning
+      against the 285 rows the result is reported on.
+
+  data/ifeval_proxy:
+    kind: derived_dataset
+    source: data/ifeval_final
+    expected_rows: 128
+    content_sha256: e45c19e83eff69e4d66f3724d097e9daf77368d36dc0b106e8821580a5ec93b7
+    hash_kind: tree_manifest_sha256
+    file_count: 2
+    size_bytes: 48943
+    selection_digest: b4e13cc31e195b53227d6cd3200788381424c52cfc8146a263ad9326e95004b0
+    hash_status: verified_against_environment_builder
+    mount: /assets/data/ifeval_proxy
+    phases: [explore]
+    derivation:
+      tool: environment/build_proxy_asset.py
+      source_rows: 541
+      ordering: sha256_of_canonical_key
+      selection: first_128_of_the_sealed_413
+      selector: harness/grade.split_source
+    materialize:
+      sources:
+        final:
+          alias: data/ifeval_final
+      builder:
+        type: task_image
+        image: docker.io/chiyizhe/ai4ai@sha256:b020d14e02f9088aca1c0015eeefb4a78758a4e18516114a0a2c8f2f3d9be820
+        script: tasks/dpo_preference_alignment/environment/build_proxy_asset.py
+        script_sha256: 865e135180795df481015c481bfdbfcc33d158b9d21bda3283112863dbb4cc58
+        command:
+          - python3
+          - /builder/repo/tasks/dpo_preference_alignment/environment/build_proxy_asset.py
+          - --ifeval
+          - "{alias:data/ifeval_final}"
+          - --output
+          - "{output}"
+    note: >-
+      The proxy's 128 rows and nothing else, so 285 of the final's 413 are unreachable
+      during the 4 h. A subset of the *evaluation* set on purpose -- the spec's rule 1
+      is about the training input, and data/ultrafeedback obeys it.
+
+      This asset and the retired projection are adjacent in one ordering and the same
+      size, so they are easy to confuse. build_proxy_asset.py records a
+      selection_digest over the emitted keys and harness/fast_eval.py refuses a file
+      that does not match it, which is the check that catches a stale asset.

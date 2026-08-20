@@ -1,0 +1,59 @@
+schema_version = "1.5"
+name = "ultrafeedback_bt_rm_rewardbench"
+
+[task]
+name = "ai4ai/ultrafeedback-bt-rm-rewardbench"
+version = "1.1.0"
+description = "Improve a scalar reward model scored on RewardBench v1"
+
+[agent]
+timeout_sec = 14400
+
+[verifier]
+timeout_sec = 59400
+environment_mode = "separate"
+
+[x-ai4ai.formal]
+retrain_budget_sec = 43200
+artifact_limit = 3
+selection_rule = "best_valid_of_up_to_3"
+
+[environment]
+dockerfile = "environment/Dockerfile"
+image = "docker.io/chiyizhe/ai4ai@sha256:bf2f8c0cc63ffd01dcac67f9d04acbf3f8db07137d83f874e8f217e9d75e4ac9"
+digest = "layers:3f7b2d7924205efd38b5335b5cde6cd656da09bbe87f18cb5832fc834ed7082c"
+config_digest = "config:ca2bc6652ba0b7f1d56d01a39b87964f3b01e97139d271e1bbbe43655b26e348"
+source_sha256 = "7cfe130b9fa9e6d022618eeae4129055855072a770b2d3acc4fe059567f924f7"
+gpus = 1
+gpu_types = ["B300"]
+cpus = 8
+memory_mb = 65536
+storage_mb = 131072
+network_mode = "no-network"
+build_args = { SOURCE_DATE_EPOCH = "1767225600" }
+
+[x-ai4ai.container]
+shm_size = "2g"
+pids_limit = 4096
+
+[x-ai4ai.gpu]
+type = "B300"
+peak_memory_mib = 26592
+
+[assets]
+"models/base" = "mistralai/Mistral-7B-Instruct-v0.2@63a8b081895390a26e140280378bc85ec8bce07a"
+"data/pairs.jsonl" = "fixed 8192-row decontaminated UltraFeedback projection, sha256 a289f95500d003d714a84cfb157446172bdab84bdf38d7f44c315b693fe67976"
+"data/rewardbench_proxy" = "fixed 512-pair exploration subset"
+"data/rewardbench" = "allenai/reward-bench@168d848cdbbea9764fae4a544dc9ca1e6cca4931, score only"
+
+[metadata]
+track = "v1"
+shipped_method = "bradley_terry_reward_modeling"
+shipped_method_source = "RLHFlow/RLHF-Reward-Modeling@fc39179f5a9a4dd75047a4c0311672905b9d9a04"
+base_model = "mistralai/Mistral-7B-Instruct-v0.2@63a8b081"
+train_data = "fixed 8192-row UltraFeedback preference projection"
+fast_metric = "rewardbench_proxy_512"
+fast_direction = "max"
+final_metric = "rewardbench_v1_score"
+final_direction = "max"
+final_gate = "loadable scalar reward model, as an adapter or full checkpoint; zero train/final overlap"

@@ -1,0 +1,95 @@
+# Direct dependencies. Do not replace the base image's torch -- everything installs
+# --no-deps, so the lock beside this file has to name every transitive too.
+#
+# PROVENANCE, AND WHAT IS AND IS NOT RECORDED.
+#
+# The reference protocol shipped no requirements file for this task. Its
+# environment/Dockerfile was two lines:
+#
+#     FROM llm-algobench-preference:0.1.0-ifeval@sha256:bbb2ef40...
+#     WORKDIR /workspace
+#
+# -- a prebuilt image with a note saying "a clean task-local rebuild and replacement
+# digest are required before batch readiness". So the versions every recorded DPO
+# measurement was made on are not recoverable from the old tree by reading it. They
+# are recoverable in part by a different route:
+#
+# `ultrafeedback_bt_rm_rewardbench` **shares this exact image** -- its task.toml says
+# so, and both tasks name the same digest. Its port recorded the image's dependency
+# set from the reference protocol's eval-requirements lock. So the eight lines below marked
+# `shared image` are that image's versions, arrived at independently, and staying
+# consistent with BT-RM here is deliberate: the two tasks were one runtime and their
+# locks should not drift apart in v1 for no reason.
+#
+# The lines marked NOT RECORDED are this task's own and have no counterpart in BT-RM:
+# nothing in the old tree names a trl, lighteval or nltk version. They were left
+# unpinned until materialization on purpose, so that the build failed rather than
+# guessing -- the alternative being to discover a mismatch twelve hours into a retrain,
+# or worse, in a final whose IFEval scorer behaves differently from the one the
+# baselines were measured with. They are now resolved and pinned, with the reasoning
+# for each recorded beside it.
+
+# ---- shared image (llm-algobench-preference:0.1.0-ifeval) ----
+accelerate==1.14.0
+# Required by OPTIMIZER=paged_adamw_32bit, run.sh's default and what the recorded
+# 2435 s / 2630 s / 2842 s formal runs used.
+bitsandbytes==0.49.0
+datasets==5.0.0
+peft==0.19.1
+safetensors==0.8.0
+# The Mistral tokenizer is a sentencepiece model.
+sentencepiece==0.2.1
+transformers==4.57.6
+
+# ---- this task's own, NOT RECORDED anywhere in the old tree ----
+#
+# Resolved at materialization, against this task's own base image. Nothing in the old
+# tree names a version for any of these, so these pins are chosen rather than
+# recovered -- see the note on numerics at the bottom of this file.
+#
+# trl supplies DPOTrainer and DPOConfig. The old evidence tells us one thing about the
+# pinned version's behaviour -- "The pinned TRL DPOTrainer requires both train_dataset
+# and eval_dataset" -- and that is a constraint on which version is correct, not a
+# version. solution/train.py passes both. 1.9.2 was checked against train.py's actual
+# call: DPOTrainer accepts model, ref_model, args, train_dataset, eval_dataset,
+# processing_class, quantization_config, peft_config and callbacks, and DPOConfig
+# carries beta, loss_type, max_length, optim, eval_strategy, load_best_model_at_end,
+# metric_for_best_model and data_seed. A version whose signature had moved would build
+# a clean image and die at trainer construction.
+trl==1.9.2
+# lighteval supplies the IFEval instruction registry that harness/grade.py patches:
+# lighteval.tasks.tasks.ifeval.{instructions_registry, instructions_utils,
+# instructions.LetterFrequencyChecker, main.IFEvalMetrics, main.ifeval_prompt}. Those
+# import paths are the compatibility surface -- they moved in upstream lighteval's
+# history, so a version that resolves them is required, not merely a recent one. All
+# five resolve on 0.13.0, and check_image.py scores a probe row through them at build
+# time rather than merely importing them.
+lighteval==0.13.0
+# nltk is what lighteval's IFEval reaches for at scoring time. grade.py replaces
+# `download` and `word_tokenize` with frozen implementations, so no corpus is needed
+# and the package must still import.
+nltk==3.9.1
+# Not a declared dependency of anything here, and still required to score a single row.
+# lighteval guards ifeval_prompt with `@requires("langdetect")` and declares langdetect
+# only under its `extended-tasks` extra, so a core-dependency resolve does not pull it
+# and the failure is a call-time ImportError inside the scorer -- which is to say, in
+# the hidden final. Named directly rather than by installing lighteval[extended-tasks],
+# because the extra carries more than this and the one package that is needed is known.
+langdetect==1.0.9
+#
+# TWO OF THE RESOLVED WHEELS DO NOT EXIST ON PYPI AS WHEELS.
+#
+# lighteval's core dependency rouge_score==0.1.2 is sdist-only, and so is langdetect.
+# The build installs --only-binary=:all: from a wheelhouse with --network=none, so both
+# have to be wheels before the wheelhouse is assembled. resolve_wheelhouse.sh beside
+# this file builds them from the upstream sdists and records both hashes: the sdist's,
+# which is the stable upstream identifier, and the built wheel's, which is what
+# --require-hashes actually pins. That is also why this task does not use
+# the operator wheelhouse resolver directly -- that script has no prebuilt-wheel stage,
+# and without one pip reports ResolutionImpossible for every lighteval ever published.
+#
+# ON NUMERICS. bitsandbytes is 0.49.0, the version the recorded runs used, so
+# paged_adamw_32bit is the same optimizer implementation -- only its hash was missing.
+# trl and lighteval are different: no version was ever recorded, so these pins are new
+# decisions, and they set the DPO loss path and the IFEval scorer respectively. They are
+# pinned here so that a later resolve cannot move them quietly.

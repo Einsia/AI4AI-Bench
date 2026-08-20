@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai4ai"
+version = "1.0.0"
+description = "Can a coding Agent improve a real post-training method under a fixed GPU budget?"
+readme = "README.md"
+# Python 3.10 needs the tomli compatibility dependency below; tomllib is part of the
+# standard library from Python 3.11 onward.
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = [
+  "tomli>=2.0.1; python_version < '3.11'",
+  "PyYAML>=6.0.2",
+]
+
+[project.optional-dependencies]
+assets = [
+  "huggingface_hub>=0.28",
+]
+dev = [
+  "pytest>=8",
+  "ruff>=0.9",
+  "setuptools>=68",
+]
+
+# Runtime code remains repository scripts invoked as `python3 orchestrator/<phase>.py`.
+# This distribution therefore installs dependency and project metadata only; explicitly
+# disabling package discovery prevents setuptools from treating repository directories
+# such as `tasks` and `tools` as import packages.
+[tool.setuptools]
+packages = []
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = ["tasks/*/environment/verl"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

@@ -1,0 +1,181 @@
+schema_version: 2
+task_id: ultrafeedback_bt_rm_rewardbench
+
+# Every path here is an alias. A deployment profile maps aliases onto real
+# directories, so the repository carries no host layout.
+path_policy: repo_relative_aliases
+
+build_contexts:
+  network: none
+  # No source tree is baked in. The upstream repository is provenance for the
+  # recipe, not code that runs -- see the `upstream` entry.
+  names: [git_deb, wheelhouse]
+  reproducibility: two network-disabled builds must agree before a digest is recorded
+
+assets:
+  upstream:
+    kind: git_repository
+    source: https://github.com/RLHFlow/RLHF-Reward-Modeling.git
+    revision: fc39179f5a9a4dd75047a4c0311672905b9d9a04
+    license: Apache-2.0
+    content_sha256: 0cb0cbd6ae127e2c133b3a666468f8a2d80e60cb12b35bb0774dd8cd01c77132
+    hash_kind: tree_manifest_sha256
+    size_bytes: 7030999
+    file_count: 46
+    note: >-
+      Provenance, not a dependency, and it is not mounted or copied anywhere. The
+      reference protocol also never executed it: `baseline/method/train.py` was a
+      standalone HF Trainer script that reimplemented the pairwise loss, and the
+      only thing taken from upstream was the recipe's shape. Recorded so the
+      hyperparameters can be traced.
+
+  models/base:
+    kind: model
+    source: mistralai/Mistral-7B-Instruct-v0.2
+    revision: 63a8b081895390a26e140280378bc85ec8bce07a
+    license: Apache-2.0
+    content_sha256: 58e5e7d64ac38c192656ea26a44388fcd989b2e1e3ea0e499d72d72d1ff6b37e
+    hash_kind: tree_manifest_sha256
+    size_bytes: 14485822096
+    file_count: 13
+    materialization:
+      sidecar: .llmab-revision
+      sidecar_content: "63a8b081895390a26e140280378bc85ec8bce07a\n"
+      note: the deterministic provenance sidecar is included in the tree hash
+    mount: /assets/models/base
+    phases: [explore, retrain, score]
+    note: >-
+      Mounted into the scoring phase as well as the training ones, which the
+      reference protocol did too but for a different reason. The submitted artifact is
+      a delta; the backbone it applies to is loaded from here. That is what makes
+      "a scalar reward model initialized from Mistral-7B-Instruct-v0.2" a property
+      of the scoring path rather than a field in a metadata file the candidate
+      wrote.
+
+  data/pairs.jsonl:
+    kind: derived_dataset
+    source: HuggingFaceH4/ultrafeedback_binarized
+    revision: 3949bf5f8c17c394422ccfab0c31ea9c20bdeb85
+    split: train_prefs
+    license: MIT
+    derivation: judge/tools/project_public_assets.py on the reference protocol
+    content_sha256: a289f95500d003d714a84cfb157446172bdab84bdf38d7f44c315b693fe67976
+    hash_kind: file_sha256
+    expected_rows: 8192
+    size_bytes: 32993886
+    mount: /assets/data/pairs.jsonl
+    phases: [explore, retrain, score]
+    derivation_detail: >-
+      NFKC, whitespace-collapse and casefold canonicalization of the 61135
+      train_prefs rows; drop any row whose prompt matches a RewardBench prompt or
+      whose chosen/rejected response matches any RewardBench response; deduplicate
+      on the canonical pair; sort by pair digest.
+    protocol_scope: >-
+      This fixed 8,192-pair projection is the complete training asset used by the
+      paper protocol, not an accidentally truncated download. The preceding 128
+      clean pairs are deterministically reserved and are not mounted by v1.5.
+      Changing the row budget defines a different task and requires a new asset
+      identity rather than silently widening this one.
+    materialize:
+      sources:
+        ultrafeedback:
+          tool: huggingface_hub.snapshot_download
+          repo_type: dataset
+          repo_id: HuggingFaceH4/ultrafeedback_binarized
+          revision: 3949bf5f8c17c394422ccfab0c31ea9c20bdeb85
+        rewardbench:
+          alias: data/rewardbench
+      builder:
+        type: task_image
+        image: docker.io/chiyizhe/ai4ai@sha256:bf2f8c0cc63ffd01dcac67f9d04acbf3f8db07137d83f874e8f217e9d75e4ac9
+        script: tools/asset_builders/build_reward_pairs.py
+        script_sha256: 205510a468b2bc4cd4c192c2133442d39f2d0f14841b17291869639c24043036
+        command:
+          - python3
+          - /builder/repo/tools/asset_builders/build_reward_pairs.py
+          - --ultrafeedback
+          - "{source:ultrafeedback}"
+          - --rewardbench
+          - "{alias:data/rewardbench}"
+          - --output
+          - "{output}"
+    also_in_score_phase: >-
+      Mounted read-only into the scoring container so final_eval.verify_disjoint
+      can recompute the RewardBench overlap from the two files. It leaks nothing --
+      the Agent has the whole pool during exploration -- and it replaces the
+      reference protocol's unverifiable `decontamination_status: passed`.
+
+  data/rewardbench:
+    kind: dataset
+    source: allenai/reward-bench
+    revision: 168d848cdbbea9764fae4a544dc9ca1e6cca4931
+    license: ODC-By-1.0, with CC-BY-NC-4.0, CC-BY-NC-SA-4.0, CC-BY-4.0, Apache-2.0 and MIT component terms
+    restrictions: follow_component_dataset_licenses_and_notices
+    content_sha256: b1aa8780d1677c8dc6790bbc6d7bba9fc7044b2949e3be8fcd1e487656c9cc1b
+    hash_kind: tree_manifest_sha256
+    parquet_sha256: 65473c20ed0627e02503557ae102c25c6b0e66b5ed69ee327e224bb95e70ca29
+    size_bytes: 2395697
+    file_count: 4
+    expected_rows: 2985
+    files: [data/filtered-00000-of-00001.parquet, README.md, LICENSE.md, .llmab-revision]
+    materialization:
+      sidecar: .llmab-revision
+      sidecar_content: "168d848cdbbea9764fae4a544dc9ca1e6cca4931\n"
+      note: the deterministic provenance sidecar is included in the tree hash
+    mount: /assets/data/rewardbench
+    phases: [score]
+    note: >-
+      New as a task asset. On the reference protocol RewardBench appeared only as
+      ${TRUSTED_REWARDBENCH} inside the judge-side projection command, and the lock
+      said "Raw UltraFeedback and RewardBench are trusted preparation inputs and
+      are never mounted in an Agent trial". Under the new split the final is scored
+      inside this repository's score phase, so the data has to be mounted there.
+      Public data with a public revision; not mounted into exploration, which is
+      what keeps 2473 of the 2985 rows out of the 4 h.
+    file_hash_status: >-
+      The parquet sha256 above was independently observed on the staged B300 asset
+      and is retained in the task record. final_eval also reports the digest and
+      enforces row/subset inventory; a sidecar rewardbench-files.json is optional
+      and is not added because it would change this four-file tree manifest.
+
+  data/rewardbench_proxy:
+    kind: derived_dataset
+    source: allenai/reward-bench
+    revision: 168d848cdbbea9764fae4a544dc9ca1e6cca4931
+    derivation: environment/build_proxy_asset.py
+    expected_rows: 512
+    mount: /assets/data/rewardbench_proxy
+    phases: [explore]
+    note: >-
+      512 pairs stratified over all 23 subsets by largest remainder with a one-row
+      floor, chosen by harness/grade.select_proxy_ids -- the same function
+      final_eval calls to recompute which rows are in P. Deliberately a subset, and
+      of the evaluation set: a proxy holding all 2985 rows would let 4 h be spent
+      tuning against the exact rows the result is reported on.
+    content_sha256: b4cbec1496ec5bda2fc5523a024ef810d26b2390654571b3aa4525c13a5edfe2
+    hash_kind: tree_manifest_sha256
+    file_count: 2
+    size_bytes: 841830
+    selection_digest: dd7e979ca66b79d34c3c8354f3603bbc24ea4a2f7455039ea9b65a5492d7df5b
+    hash_status: verified_against_harness_selector
+    materialize:
+      sources:
+        rewardbench:
+          alias: data/rewardbench
+      builder:
+        type: task_image
+        image: docker.io/chiyizhe/ai4ai@sha256:bf2f8c0cc63ffd01dcac67f9d04acbf3f8db07137d83f874e8f217e9d75e4ac9
+        script: tasks/ultrafeedback_bt_rm_rewardbench/environment/build_proxy_asset.py
+        script_sha256: 9ee0cab9450775f20aa28eaaa291940455f560a0174fcec993a1c47bef01b384
+        command:
+          - python3
+          - /builder/repo/tasks/ultrafeedback_bt_rm_rewardbench/environment/build_proxy_asset.py
+          - --rewardbench
+          - "{alias:data/rewardbench}"
+          - --output
+          - "{output}"
+
+notes:
+  - The five aliases the reference protocol listed were upstream, the Mistral snapshot, train.jsonl, public.jsonl and the projection manifest. public.jsonl and the manifest are gone: the 128-pair UltraFeedback split existed to select a checkpoint in the old three-tier design, and v1 takes the last checkpoint.
+  - The projection manifest is also gone, and with it the manifest-hash binding the old trainer and evaluator both re-derived. The pool's file_sha256 is recorded here instead, which is the fact those digests were standing in for.
+  - RewardBench overlap digests and the trusted projection receipt stayed judge-only on the reference protocol. The overlap is now recomputed from the mounted data at score time, so the claim is checkable inside this repository.

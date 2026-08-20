@@ -1,0 +1,30 @@
+# Do not replace the base image's torch. Everything below installs --no-deps, so
+# the lock beside this file has to name every transitive dependency too.
+#
+# These are the versions every qualified BT-RM measurement was made on. The
+# reference protocol had two images -- a training image that pip-installed these
+# without hashes, and a separate hash-locked evaluation image -- and v1 has one, so
+# the union is pinned here.
+accelerate==1.14.0
+# Required by OPTIMIZER=paged_adamw_32bit, which is run.sh's default and what the
+# recorded 2646 s / 2616 s runs used. The reference protocol's training image installed
+# this with a bare `pip install` and hash-locked only the evaluation image, so no
+# digest for it existed anywhere in the old tree and the port left the lock line
+# commented out rather than inventing one. The hash is now resolved from the index --
+# 0.49.0 itself, not a substitute version, so the optimizer implementation is the one
+# the recorded runs used.
+bitsandbytes==0.49.0
+datasets==5.0.0
+# Transitive, pinned here rather than left to the resolver. huggingface_hub asks for
+# hf-xet<2, and 1.6.0 was published after these measurements were made -- so a fresh
+# resolve silently moves it and the lock stops being the attested set plus bitsandbytes.
+# Held at the version the carried-over lock recorded. The image sets HF_HUB_OFFLINE=1,
+# so this is about keeping the delta auditable, not about download behaviour.
+hf-xet==1.5.2
+peft==0.19.1
+# artifact.py reads tensor shapes out of the adapter's safetensors header without
+# loading the weights, so this is a direct dependency rather than an incidental one.
+safetensors==0.8.0
+# The Mistral tokenizer is a sentencepiece model.
+sentencepiece==0.2.1
+transformers==4.57.6

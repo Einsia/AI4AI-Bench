@@ -1,0 +1,59 @@
+schema_version: 1
+
+# Build-time inputs shared by several task images. These files are not runtime
+# assets and are never mounted into an Agent run. URLs are preparation sources;
+# the exact filename set and SHA-256 values below are authoritative.
+contexts:
+  git_deb:
+    kind: locked_files
+    platform: ubuntu-22.04-amd64
+    files:
+      git-man_1%3a2.34.1-1ubuntu1.17_all.deb:
+        size_bytes: 953934
+        sha256: 8129d7b87facd50e32f806ad9905dd99435e7b0bb2566d6a33e5b5371c5c36e5
+        url: https://launchpad.net/ubuntu/+archive/primary/+files/git-man_2.34.1-1ubuntu1.17_all.deb
+      git_1%3a2.34.1-1ubuntu1.17_amd64.deb:
+        size_bytes: 3173622
+        sha256: 8794fcf2c4606c445df0db3dc963c8fb852772208bfb12727a12717c03767af7
+        url: https://launchpad.net/ubuntu/+archive/primary/+files/git_2.34.1-1ubuntu1.17_amd64.deb
+      libbrotli1_1.0.9-2build6_amd64.deb:
+        size_bytes: 315164
+        sha256: 8e6aa2dfd44df287b9fb227862f3b6062ec074dd39a247874edfe12e1dcc3841
+        url: https://launchpad.net/ubuntu/+archive/primary/+files/libbrotli1_1.0.9-2build6_amd64.deb
+      libcurl3-gnutls_7.81.0-1ubuntu1.25_amd64.deb:
+        size_bytes: 284452
+        sha256: 3c21110640b75778a8475a27a9aaeff1c2dd50091cabe6fa9ac05ade21d1a6f2
+        url: https://launchpad.net/ubuntu/+archive/primary/+files/libcurl3-gnutls_7.81.0-1ubuntu1.25_amd64.deb
+      liberror-perl_0.17029-1_all.deb:
+        size_bytes: 26460
+        sha256: 13c044def376282cd2a6a4b21e5ec829a6ac8aecd745183df22570e320cec08e
+        url: https://launchpad.net/ubuntu/+archive/primary/+files/liberror-perl_0.17029-1_all.deb
+      libexpat1_2.4.7-1ubuntu0.7_amd64.deb:
+        size_bytes: 92136
+        sha256: a538ba8ea04ac4011337e99f77a8f3387ddef2909b8a83a58d9662d8715df4cd
+        url: https://launchpad.net/ubuntu/+archive/primary/+files/libexpat1_2.4.7-1ubuntu0.7_amd64.deb
+      libnghttp2-14_1.43.0-1ubuntu0.4_amd64.deb:
+        size_bytes: 76932
+        sha256: 6e968d1ed7abb3635a3b0707ebfa20cd368ce784f83cc567b11c0723217a6de4
+        url: https://launchpad.net/ubuntu/+archive/primary/+files/libnghttp2-14_1.43.0-1ubuntu0.4_amd64.deb
+      libpsl5_0.21.0-1.2build2_amd64.deb:
+        size_bytes: 58388
+        sha256: cd29dee0eac2bdf3f944f47b3926993827dc6b3710251df76006fab2fd09f7e1
+        url: https://launchpad.net/ubuntu/+archive/primary/+files/libpsl5_0.21.0-1.2build2_amd64.deb
+      librtmp1_2.4+20151223.gitfa8646d.1-2build4_amd64.deb:
+        size_bytes: 58190
+        sha256: c8bdaa1e777d08888914e922f8f76441c26ee36438d3aa59161ecccc2421f77e
+        url: https://launchpad.net/ubuntu/+archive/primary/+files/librtmp1_2.4+20151223.gitfa8646d.1-2build4_amd64.deb
+      libssh-4_0.9.6-2ubuntu0.22.04.7_amd64.deb:
+        size_bytes: 187036
+        sha256: b2b6e27c57f374365619f4061058780e078721d87f2ad67838a11833f0197e1d
+        url: https://launchpad.net/ubuntu/+archive/primary/+files/libssh-4_0.9.6-2ubuntu0.22.04.7_amd64.deb
+
+  tini_deb:
+    kind: locked_files
+    platform: ubuntu-22.04-amd64
+    files:
+      tini_0.19.0-1_amd64.deb:
+        size_bytes: 275728
+        sha256: 91119fce795e668bb4db2c94d1416127688242e1856f2fcf8cf2112dde8da57d
+        url: https://launchpad.net/ubuntu/+archive/primary/+files/tini_0.19.0-1_amd64.deb
