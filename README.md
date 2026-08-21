@@ -1,9 +1,10 @@
 # AI4AI-Bench
 
-[Paper (coming soon)](https://example.com/ai4ai-bench/paper) ·
-[arXiv (coming soon)](https://example.com/ai4ai-bench/arxiv) ·
-[Website (coming soon)](https://example.com/ai4ai-bench/website) ·
-[Results / Trajectories (coming soon)](https://example.com/ai4ai-bench/results)
+[![Homepage](https://img.shields.io/badge/Homepage-lab.einsia.ai-0969DA?style=flat-square&logo=homepage&logoColor=white)](https://lab.einsia.ai/ai4ai/)
+[![arXiv](https://img.shields.io/badge/arXiv-2608.20318-b31b1b?style=flat-square&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2608.20318)
+[![Docker](https://img.shields.io/badge/Docker-chiyizhe%2Fai4ai-2496ED?style=flat-square&logo=docker&logoColor=white)](https://hub.docker.com/r/chiyizhe/ai4ai)
+
+[Paper (PDF)](https://arxiv.org/pdf/2608.20318) · [Task gallery](https://lab.einsia.ai/ai4ai/tasks/) · [Trajectory explorer](https://lab.einsia.ai/ai4ai/trajectories/)
 
 AI4AI-Bench asks whether a coding agent can improve an existing AI training recipe—not
 merely edit code that passes a fixed test. Its ten tasks span generation, alignment,
@@ -125,13 +126,11 @@ current absence of a blind evaluation service.
 
 ## Citation
 
-The paper metadata is not public yet. Replace the marked fields after the arXiv release.
-
 ```bibtex
-@article{ai4aibench2026,
+@article{chi2026ai4ai,
   title   = {AI4AI-Bench: Benchmarking LLM Agents in Algorithmic Design for Recursive Self-Improvement},
   author  = {Yizhe Chi and Wenyi Li and Deyao Hong and Xiaoqiu Wang and Mingju Gao and Kaisen Yang and Bingxiang He and Youjie Zheng and Calvin Xiao and Qinhuai Na},
-  journal = {arXiv preprint arXiv:TODO},
+  journal = {arXiv preprint arXiv:2608.20318},
   year    = {2026}
 }
 ```
