@@ -1,10 +1,11 @@
 # AI4AI-Bench
 
-[![Homepage](https://img.shields.io/badge/Homepage-lab.einsia.ai-0969DA?style=flat-square&logo=homepage&logoColor=white)](https://lab.einsia.ai/ai4ai/)
 [![arXiv](https://img.shields.io/badge/arXiv-2608.20318-b31b1b?style=flat-square&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2608.20318)
+[![Paper](https://img.shields.io/badge/Paper-PDF-EC1C24?style=flat-square&logo=files&logoColor=white)](https://arxiv.org/pdf/2608.20318)
+[![Homepage](https://img.shields.io/badge/Homepage-lab.einsia.ai-0969DA?style=flat-square&logo=homepage&logoColor=white)](https://lab.einsia.ai/ai4ai/)
+[![Tasks](https://img.shields.io/badge/Tasks-10-2E7D32?style=flat-square)](https://lab.einsia.ai/ai4ai/tasks/)
+[![Trajectories](https://img.shields.io/badge/Trajectories-290-6E56CF?style=flat-square)](https://lab.einsia.ai/ai4ai/trajectories/)
 [![Docker](https://img.shields.io/badge/Docker-chiyizhe%2Fai4ai-2496ED?style=flat-square&logo=docker&logoColor=white)](https://hub.docker.com/r/chiyizhe/ai4ai)
-
-[Paper (PDF)](https://arxiv.org/pdf/2608.20318) · [Task gallery](https://lab.einsia.ai/ai4ai/tasks/) · [Trajectory explorer](https://lab.einsia.ai/ai4ai/trajectories/)
 
 AI4AI-Bench asks whether a coding agent can improve an existing AI training recipe—not
 merely edit code that passes a fixed test. Its ten tasks span generation, alignment,
